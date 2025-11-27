@@ -2,20 +2,13 @@
 
 An MCP server for querying Markdown frontmatter with DuckDB SQL.
 
-## Features
-
-- **inspect_frontmatter**: Get frontmatter schema from files matching a glob pattern
-- **query_frontmatter**: Query frontmatter data with DuckDB SQL
-
 ## Installation
 
 ```bash
 uv tool install git+https://github.com/kzmshx/filesystem-frontmatter-mcp.git
 ```
 
-## Usage
-
-### Configuration for Claude Desktop / Claude Code
+## Configuration
 
 ```json
 {
@@ -28,15 +21,27 @@ uv tool install git+https://github.com/kzmshx/filesystem-frontmatter-mcp.git
 }
 ```
 
-### Tool Examples
+## Tools
 
-#### Inspect Schema
+### inspect_frontmatter
 
+Get schema information from frontmatter across files.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `glob` | string | Glob pattern relative to base directory |
+
+**Example:**
+
+Input:
+
+```json
+{
+  "glob": "**/*.md"
+}
 ```
-inspect_frontmatter("**/*.md")
-```
 
-Output example:
+Output:
 
 ```json
 {
@@ -58,21 +63,62 @@ Output example:
 }
 ```
 
-#### SQL Queries
+### query_frontmatter
 
-```sql
--- List files from this month
-SELECT path, date, tags
-FROM files
-WHERE date LIKE '2025-11-%'
-ORDER BY date DESC
+Query frontmatter data with DuckDB SQL.
 
--- Aggregate tags (expanding arrays)
-SELECT tag, COUNT(*) as count
-FROM files, UNNEST(from_json(tags, '[""]')) AS t(tag)
-WHERE date LIKE '2025-11-%'
-GROUP BY tag
-ORDER BY count DESC
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `glob` | string | Glob pattern relative to base directory |
+| `sql` | string | DuckDB SQL query referencing `files` table |
+
+**Example 1: Filter by date**
+
+Input:
+
+```json
+{
+  "glob": "**/*.md",
+  "sql": "SELECT path, date, tags FROM files WHERE date LIKE '2025-11-%' ORDER BY date DESC"
+}
+```
+
+Output:
+
+```json
+{
+  "columns": ["path", "date", "tags"],
+  "row_count": 24,
+  "results": [
+    {"path": "daily/2025-11-28.md", "date": "2025-11-28", "tags": "[\"journal\"]"},
+    {"path": "daily/2025-11-27.md", "date": "2025-11-27", "tags": "[\"journal\"]"}
+  ]
+}
+```
+
+**Example 2: Aggregate tags**
+
+Input:
+
+```json
+{
+  "glob": "**/*.md",
+  "sql": "SELECT tag, COUNT(*) as count FROM files, UNNEST(from_json(tags, '[\"\"]')) AS t(tag) GROUP BY tag ORDER BY count DESC LIMIT 5"
+}
+```
+
+Output:
+
+```json
+{
+  "columns": ["tag", "count"],
+  "row_count": 5,
+  "results": [
+    {"tag": "ai", "count": 42},
+    {"tag": "python", "count": 35},
+    {"tag": "mcp", "count": 18}
+  ]
+}
 ```
 
 ## Technical Notes
@@ -82,7 +128,6 @@ ORDER BY count DESC
 All frontmatter values are passed to DuckDB as strings. Use `TRY_CAST` in SQL for type conversion when needed.
 
 ```sql
--- Date comparison
 SELECT * FROM files
 WHERE TRY_CAST(date AS DATE) >= '2025-11-01'
 ```
