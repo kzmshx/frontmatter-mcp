@@ -1,0 +1,1 @@
+"""Frontmatter parser module."""

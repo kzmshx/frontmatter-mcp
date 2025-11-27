@@ -1,0 +1,1 @@
+"""DuckDB query execution module."""
