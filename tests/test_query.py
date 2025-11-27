@@ -131,3 +131,61 @@ class TestExecuteQuery:
         assert "b.md" in paths
         assert "c.md" in paths
         assert "a.md" not in paths
+
+    def test_templater_expressions_mixed_with_dates(self) -> None:
+        """Handle Templater expressions mixed with real dates.
+
+        This tests the scenario where template files contain unexpanded
+        Templater expressions like '<% tp.date.now("YYYY-MM-DD") %>'
+        alongside real date values from normal files.
+
+        The key assertion is that no type error occurs - all values are
+        treated as strings and the query executes successfully.
+        """
+        records = [
+            {"path": "a.md", "date": date(2025, 11, 27)},
+            {"path": "b.md", "date": date(2025, 11, 26)},
+            # Template file with unexpanded Templater expression
+            {"path": "template.md", "date": '<% tp.date.now("YYYY-MM-DD") %>'},
+        ]
+        # Query should not error - all values are strings now
+        # Note: String comparison means '<% ...' sorts after '2025-...'
+        result = execute_query(records, "SELECT path, date FROM files")
+
+        # All 3 records are returned without type errors
+        assert result["row_count"] == 3
+
+        # To filter out templates, use LIKE or explicit date patterns
+        result_filtered = execute_query(
+            records,
+            "SELECT path FROM files WHERE date LIKE '2025-%' AND date >= '2025-11-26'",
+        )
+        assert result_filtered["row_count"] == 2
+        paths = [r["path"] for r in result_filtered["results"]]
+        assert "a.md" in paths
+        assert "b.md" in paths
+        assert "template.md" not in paths
+
+    def test_mixed_type_values_in_same_column(self) -> None:
+        """Handle mixed types in the same column.
+
+        All values are serialized to strings, so queries work regardless
+        of the original Python type.
+        """
+        records = [
+            {"path": "a.md", "value": "string"},
+            {"path": "b.md", "value": 42},
+            {"path": "c.md", "value": 3.14},
+            {"path": "d.md", "value": True},
+            {"path": "e.md", "value": ["a", "b"]},
+        ]
+        result = execute_query(records, "SELECT path, value FROM files")
+
+        assert result["row_count"] == 5
+        # All values are strings
+        values = {r["path"]: r["value"] for r in result["results"]}
+        assert values["a.md"] == "string"
+        assert values["b.md"] == "42"
+        assert values["c.md"] == "3.14"
+        assert values["d.md"] == "True"
+        assert values["e.md"] == '["a", "b"]'
