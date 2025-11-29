@@ -155,7 +155,7 @@ Output:
 }
 ```
 
-Example 2: Remove properties
+**Example 2: Remove properties**
 
 Input:
 
