@@ -121,6 +121,58 @@ def update(
     return update_file(abs_path, base, set_values=set, unset=unset)
 
 
+@mcp.tool()
+def batch_update(
+    glob: str,
+    set: dict[str, Any] | None = None,
+    unset: list[str] | None = None,
+) -> dict[str, Any]:
+    """Update frontmatter properties in multiple files matching glob pattern.
+
+    Args:
+        glob: Glob pattern relative to base directory (e.g. "atoms/**/*.md").
+        set: Properties to add or overwrite in all matched files.
+        unset: Property names to remove from all matched files.
+
+    Returns:
+        Dict with updated_count, updated_files, and warnings.
+
+    Notes:
+        - If same key appears in both set and unset, unset takes priority.
+        - If a file has no frontmatter, it will be created.
+        - Errors in individual files are recorded in warnings, not raised.
+    """
+    base = get_base_dir().resolve()
+    paths = collect_files(glob)
+
+    updated_files: list[str] = []
+    warnings: list[str] = []
+
+    for file_path in paths:
+        abs_path = file_path.resolve()
+        try:
+            abs_path.relative_to(base)
+        except ValueError:
+            warnings.append(f"Skipped (outside base directory): {abs_path}")
+            continue
+
+        try:
+            update_result = update_file(abs_path, base, set_values=set, unset=unset)
+            updated_files.append(update_result["path"])
+        except Exception as e:
+            rel_path = abs_path.relative_to(base)
+            warnings.append(f"Failed to update {rel_path}: {e}")
+
+    response: dict[str, Any] = {
+        "updated_count": len(updated_files),
+        "updated_files": updated_files,
+    }
+    if warnings:
+        response["warnings"] = warnings
+
+    return response
+
+
 def main() -> None:
     """Entry point for the MCP server."""
     global _base_dir
