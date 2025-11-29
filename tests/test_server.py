@@ -126,7 +126,10 @@ class TestUpdateFrontmatter:
 
         assert result["path"] == "a.md"
         assert result["frontmatter"]["status"] == "published"
-        assert str(result["frontmatter"]["date"]) == "2025-11-27"
+        # frontmatter library parses YAML dates as datetime.date objects
+        import datetime
+
+        assert result["frontmatter"]["date"] == datetime.date(2025, 11, 27)
 
     def test_unset_property(self, temp_base_dir: Path) -> None:
         """Unset a property from a file."""
