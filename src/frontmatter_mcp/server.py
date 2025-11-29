@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import frontmatter
 from mcp.server.fastmcp import FastMCP
 
 from frontmatter_mcp.frontmatter import parse_files, update_file
@@ -196,7 +197,6 @@ def batch_array_add(
         - If property is not an array, file is skipped with a warning.
         - Files are only included in updated_files if actually modified.
     """
-    import frontmatter
 
     base = get_base_dir().resolve()
     paths = collect_files(glob)
@@ -272,7 +272,6 @@ def batch_array_remove(
         - If property is not an array, file is skipped with a warning.
         - Files are only included in updated_files if actually modified.
     """
-    import frontmatter
 
     base = get_base_dir().resolve()
     paths = collect_files(glob)
@@ -347,7 +346,6 @@ def batch_array_replace(
         - If property is not an array, file is skipped with a warning.
         - Files are only included in updated_files if actually modified.
     """
-    import frontmatter
 
     base = get_base_dir().resolve()
     paths = collect_files(glob)
@@ -422,7 +420,6 @@ def batch_array_sort(
         - If property is not an array, file is skipped with a warning.
         - Files are only included in updated_files if actually modified.
     """
-    import frontmatter
 
     base = get_base_dir().resolve()
     paths = collect_files(glob)
