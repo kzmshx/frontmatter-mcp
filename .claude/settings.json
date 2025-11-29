@@ -1,23 +1,12 @@
 {
   "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "make lint 2>&1 || true"
-          }
-        ]
-      }
-    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
         "hooks": [
           {
             "type": "command",
-            "command": "make fix 2>&1"
+            "command": "make lint 2>&1 || true"
           }
         ]
       }
