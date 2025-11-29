@@ -33,7 +33,7 @@ def collect_files(glob_pattern: str) -> list[Path]:
 
 
 @mcp.tool()
-def inspect_frontmatter(glob: str) -> dict[str, Any]:
+def query_inspect(glob: str) -> dict[str, Any]:
     """Get frontmatter schema from files matching glob pattern.
 
     Args:
@@ -58,7 +58,7 @@ def inspect_frontmatter(glob: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-def query_frontmatter(glob: str, sql: str) -> dict[str, Any]:
+def query(glob: str, sql: str) -> dict[str, Any]:
     """Query frontmatter with DuckDB SQL.
 
     Args:
@@ -86,7 +86,7 @@ def query_frontmatter(glob: str, sql: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-def update_frontmatter(
+def update(
     path: str,
     set: dict[str, Any] | None = None,
     unset: list[str] | None = None,
