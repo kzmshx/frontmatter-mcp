@@ -2,23 +2,27 @@
 
 An MCP server for querying Markdown frontmatter with DuckDB SQL.
 
-## Installation
-
-```bash
-uv tool install git+https://github.com/kzmshx/frontmatter-mcp.git
-```
-
 ## Configuration
 
 ```json
 {
   "mcpServers": {
     "frontmatter": {
-      "command": "frontmatter-mcp",
-      "args": ["--base-dir", "/path/to/markdown/directory"]
+      "command": "uvx",
+      "args": ["frontmatter-mcp", "--base-dir", "/path/to/markdown/directory"]
     }
   }
 }
+```
+
+## Installation (Optional)
+
+If you prefer to install globally:
+
+```bash
+pip install frontmatter-mcp
+# or
+uv tool install frontmatter-mcp
 ```
 
 ## Tools
