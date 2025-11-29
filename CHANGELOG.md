@@ -1,1 +1,39 @@
 # Changelog
+
+## [0.2.0](https://github.com/kzmshx/frontmatter-mcp/compare/v0.1.0...v0.2.0) (2025-11-29)
+
+
+### ⚠ BREAKING CHANGES
+
+* Tool names have changed
+    - inspect_frontmatter -> query_inspect
+    - query_frontmatter -> query
+    - update_frontmatter -> update
+
+### Features
+
+* add batch array tools for array property operations ([#6](https://github.com/kzmshx/frontmatter-mcp/issues/6)) ([04d46a9](https://github.com/kzmshx/frontmatter-mcp/commit/04d46a988400b58c5776728454f17a19a3ed976b))
+* add batch_update tool ([#5](https://github.com/kzmshx/frontmatter-mcp/issues/5)) ([a5b2bcf](https://github.com/kzmshx/frontmatter-mcp/commit/a5b2bcfb6b637444766518c1ac355c8531703f40))
+* add MIT License to the project ([4618791](https://github.com/kzmshx/frontmatter-mcp/commit/4618791cdae128494000d856eac90d4cad3fd353))
+* add update_frontmatter tool ([#1](https://github.com/kzmshx/frontmatter-mcp/issues/1)) ([d53b16b](https://github.com/kzmshx/frontmatter-mcp/commit/d53b16b376d9e49664e543701bd3491baec30af1))
+* implement MCP server with inspect and query tools ([c64a5cb](https://github.com/kzmshx/frontmatter-mcp/commit/c64a5cb438a9b4c5f5fcea14380a57f9f1eab7b0))
+* rename tools for better naming convention ([#4](https://github.com/kzmshx/frontmatter-mcp/issues/4)) ([1458c5f](https://github.com/kzmshx/frontmatter-mcp/commit/1458c5f57fcf90f9d72aff22d6e971b99d8a47d1))
+
+
+### Bug Fixes
+
+* output Unicode directly instead of escape sequences ([56c96d2](https://github.com/kzmshx/frontmatter-mcp/commit/56c96d298655fd30bd73535dccf0952870fde14b))
+* return dict instead of JSON string from tools ([#3](https://github.com/kzmshx/frontmatter-mcp/issues/3)) ([c34b399](https://github.com/kzmshx/frontmatter-mcp/commit/c34b3996e6b434b769127e65fc01cf3290a06238))
+
+
+### Documentation
+
+* add architecture decision records ([50c1809](https://github.com/kzmshx/frontmatter-mcp/commit/50c1809db4645de11c3be71a9d5e1a4b89a99cab))
+* add PR review commands to CLAUDE.md ([#10](https://github.com/kzmshx/frontmatter-mcp/issues/10)) ([1df3391](https://github.com/kzmshx/frontmatter-mcp/commit/1df33918dc70d0b233c36058946f43527e33e3e1))
+* add README with installation and usage guide ([790a313](https://github.com/kzmshx/frontmatter-mcp/commit/790a3138e207f7c906e98541d2516b52266a3c41))
+* add shared documentation rules to CLAUDE.md ([3aac2bb](https://github.com/kzmshx/frontmatter-mcp/commit/3aac2bb5fc93630baaaeeb05866eefc4c71c0dd1))
+* improve README with clear tool documentation ([40202c1](https://github.com/kzmshx/frontmatter-mcp/commit/40202c1f3400ecd31df11f114e0262e9940b6457))
+* translate all documentation to English ([1a24138](https://github.com/kzmshx/frontmatter-mcp/commit/1a241384b1e8da81aecec8a9fe859d0d13142b77))
+* update README with new tool names and batch tools ([#7](https://github.com/kzmshx/frontmatter-mcp/issues/7)) ([08c5ce7](https://github.com/kzmshx/frontmatter-mcp/commit/08c5ce7c8dd68462628912e4962cb53063f85323))
+
+## Changelog
