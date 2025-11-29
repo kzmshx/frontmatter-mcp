@@ -11,5 +11,12 @@
         ]
       }
     ]
+  },
+  "permissions": {
+    "allow": [
+      "mcp__serena"
+    ],
+    "deny": [],
+    "ask": []
   }
 }
