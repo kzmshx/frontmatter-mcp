@@ -8,8 +8,9 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from frontmatter_mcp.parser import infer_schema, parse_files
+from frontmatter_mcp.frontmatter import parse_files, update_file
 from frontmatter_mcp.query import execute_query
+from frontmatter_mcp.schema import infer_schema
 
 # Global base directory
 _base_dir: Path | None = None
@@ -82,6 +83,43 @@ def query_frontmatter(glob: str, sql: str) -> str:
     if warnings:
         result["warnings"] = warnings
 
+    return json.dumps(result, default=str, ensure_ascii=False)
+
+
+@mcp.tool()
+def update_frontmatter(
+    path: str,
+    set: dict[str, Any] | None = None,
+    unset: list[str] | None = None,
+) -> str:
+    """Update frontmatter properties in a single file.
+
+    Args:
+        path: File path relative to base directory.
+        set: Properties to add or overwrite. Values are applied as-is (null becomes
+            YAML null, empty string becomes empty value).
+        unset: Property names to remove completely.
+
+    Returns:
+        JSON with path and updated frontmatter.
+
+    Notes:
+        - If same key appears in both set and unset, unset takes priority.
+        - If file has no frontmatter, it will be created.
+    """
+    base = get_base_dir().resolve()
+    abs_path = (base / path).resolve()
+
+    # Security: ensure path is within base_dir
+    try:
+        abs_path.relative_to(base)
+    except ValueError as e:
+        raise ValueError(f"Path must be within base directory: {path}") from e
+
+    if not abs_path.exists():
+        raise FileNotFoundError(f"File not found: {path}")
+
+    result = update_file(abs_path, base, set_values=set, unset=unset)
     return json.dumps(result, default=str, ensure_ascii=False)
 
 

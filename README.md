@@ -27,9 +27,9 @@ uv tool install git+https://github.com/kzmshx/frontmatter-mcp.git
 
 Get schema information from frontmatter across files.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `glob` | string | Glob pattern relative to base directory |
+| Parameter | Type   | Description                             |
+| --------- | ------ | --------------------------------------- |
+| `glob`    | string | Glob pattern relative to base directory |
 
 **Example:**
 
@@ -67,10 +67,10 @@ Output:
 
 Query frontmatter data with DuckDB SQL.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `glob` | string | Glob pattern relative to base directory |
-| `sql` | string | DuckDB SQL query referencing `files` table |
+| Parameter | Type   | Description                                |
+| --------- | ------ | ------------------------------------------ |
+| `glob`    | string | Glob pattern relative to base directory    |
+| `sql`     | string | DuckDB SQL query referencing `files` table |
 
 **Example 1: Filter by date**
 
@@ -120,6 +120,57 @@ Output:
   ]
 }
 ```
+
+### update_frontmatter
+
+Update frontmatter properties in a single file.
+
+| Parameter | Type     | Description                          |
+| --------- | -------- | ------------------------------------ |
+| `path`    | string   | File path relative to base directory |
+| `set`     | object   | Properties to add or overwrite       |
+| `unset`   | string[] | Property names to remove             |
+
+**Example 1: Set properties**
+
+Input:
+
+```json
+{
+  "path": "notes/idea.md",
+  "set": {"status": "published", "tags": ["ai", "python"]}
+}
+```
+
+Output:
+
+```json
+{
+  "path": "notes/idea.md",
+  "frontmatter": {
+    "title": "Idea",
+    "status": "published",
+    "tags": ["ai", "python"]
+  }
+}
+```
+
+**Example 2: Remove properties**
+
+Input:
+
+```json
+{
+  "path": "notes/draft.md",
+  "unset": ["draft"]
+}
+```
+
+**Notes:**
+
+- Values in `set` are applied as-is: `null` becomes YAML `null`, `""` becomes empty string
+- If same key appears in both `set` and `unset`, `unset` takes priority
+- File content (body) is preserved
 
 ## Technical Notes
 

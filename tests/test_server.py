@@ -122,3 +122,46 @@ class TestQueryFrontmatter:
         assert result["row_count"] == 3
         assert result["results"][0]["tag"] == "python"
         assert result["results"][0]["count"] == 2
+
+
+class TestUpdateFrontmatter:
+    """Tests for update_frontmatter tool."""
+
+    def test_set_property(self, temp_base_dir: Path) -> None:
+        """Set a property on a file."""
+        result_json = server_module.update_frontmatter(
+            "a.md", set={"status": "published"}
+        )
+        result = json.loads(result_json)
+
+        assert result["path"] == "a.md"
+        assert result["frontmatter"]["status"] == "published"
+        assert result["frontmatter"]["date"] == "2025-11-27"
+
+    def test_unset_property(self, temp_base_dir: Path) -> None:
+        """Unset a property from a file."""
+        result_json = server_module.update_frontmatter("b.md", unset=["tags"])
+        result = json.loads(result_json)
+
+        assert "tags" not in result["frontmatter"]
+
+    def test_set_and_unset(self, temp_base_dir: Path) -> None:
+        """Set and unset properties."""
+        result_json = server_module.update_frontmatter(
+            "subdir/c.md", set={"status": "done"}, unset=["summary"]
+        )
+        result = json.loads(result_json)
+
+        assert result["path"] == "subdir/c.md"
+        assert result["frontmatter"]["status"] == "done"
+        assert "summary" not in result["frontmatter"]
+
+    def test_file_not_found(self, temp_base_dir: Path) -> None:
+        """Error when file does not exist."""
+        with pytest.raises(FileNotFoundError):
+            server_module.update_frontmatter("nonexistent.md", set={"x": 1})
+
+    def test_path_outside_base_dir(self, temp_base_dir: Path) -> None:
+        """Error when path is outside base_dir."""
+        with pytest.raises(ValueError):
+            server_module.update_frontmatter("../outside.md", set={"x": 1})
