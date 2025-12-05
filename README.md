@@ -231,27 +231,25 @@ Sort an array property in multiple files.
 
 ### index_status
 
-Get the status of the semantic search index (requires `FRONTMATTER_ENABLE_SEMANTIC=true`).
+Get the status of the semantic search index.
+
+This tool is only available when `FRONTMATTER_ENABLE_SEMANTIC=true`.
 
 **Example:**
 
 ```json
-// Output (when disabled)
-{ "enabled": false }
+// Output
+{ "indexing": false }
 
-// Output (when enabled)
-{
-  "enabled": true,
-  "indexing": false,
-  "indexed_count": 660,
-  "model": "cl-nagoya/ruri-v3-30m",
-  "cache_path": "/path/to/vault/.frontmatter-mcp/embeddings.duckdb"
-}
+// Output (when indexing in progress)
+{ "indexing": true }
 ```
 
 ### index_refresh
 
 Refresh the semantic search index (differential update).
+
+This tool is only available when `FRONTMATTER_ENABLE_SEMANTIC=true`.
 
 **Example:**
 
