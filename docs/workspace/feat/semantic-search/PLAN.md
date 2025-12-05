@@ -232,6 +232,28 @@ semantic = [
 ]
 ```
 
+### uvx での使用
+
+uvx は optional dependency group を直接指定できないため、`--with` で明示指定する。
+
+```json
+{
+  "mcpServers": {
+    "frontmatter": {
+      "command": "uvx",
+      "args": [
+        "--with", "sentence-transformers",
+        "frontmatter-mcp",
+        "--base-dir", "/path/to/vault"
+      ],
+      "env": {
+        "FRONTMATTER_ENABLE_SEMANTIC": "true"
+      }
+    }
+  }
+}
+```
+
 VSS 拡張は DuckDB 本体に含まれており、`INSTALL vss; LOAD vss;` で有効化する。
 
 ### DuckDB VSS の注意点
