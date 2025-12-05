@@ -17,11 +17,11 @@ frontmatter-mcp にセマンティック検索機能を追加する。ローカ�
 
 ## 技術選定
 
-| 要素 | 選定 | 理由 |
-|------|------|------|
+| 要素             | 選定                  | 理由                                    |
+| ---------------- | --------------------- | --------------------------------------- |
 | Embedding モデル | cl-nagoya/ruri-v3-30m | 日本語特化、軽量（30M）、JMTEB 高スコア |
-| ベクトル検索 | DuckDB VSS 拡張 | 既存 DuckDB 基盤を活用、SQL で検索可能 |
-| キャッシュ | DuckDB ファイル永続化 | 差分更新可能、シンプル |
+| ベクトル検索     | DuckDB VSS 拡張       | 既存 DuckDB 基盤を活用、SQL で検索可能  |
+| キャッシュ       | DuckDB ファイル永続化 | 差分更新可能、シンプル                  |
 
 ## 設計方針
 
@@ -113,7 +113,7 @@ def index_status() -> dict:
             "indexing": false,
             "indexed_count": 660,
             "model": "cl-nagoya/ruri-v3-30m",
-            "cache_path": "~/.cache/frontmatter-mcp/embeddings.duckdb"
+            "cache_path": "{base_dir}/.frontmatter-mcp/embeddings.duckdb"
         }
     """
 ```
@@ -179,11 +179,11 @@ query(
 
 ## 環境変数
 
-| 変数 | デフォルト | 説明 |
-|------|-----------|------|
-| FRONTMATTER_ENABLE_SEMANTIC | false | セマンティック検索を有効化 |
-| FRONTMATTER_EMBEDDING_MODEL | cl-nagoya/ruri-v3-30m | Embedding モデル |
-| FRONTMATTER_CACHE_DIR | `--base-dir`/.frontmatter-mcp | キャッシュディレクトリ |
+| 変数                        | デフォルト                    | 説明                       |
+| --------------------------- | ----------------------------- | -------------------------- |
+| FRONTMATTER_ENABLE_SEMANTIC | false                         | セマンティック検索を有効化 |
+| FRONTMATTER_EMBEDDING_MODEL | cl-nagoya/ruri-v3-30m         | Embedding モデル           |
+| FRONTMATTER_CACHE_DIR       | `--base-dir`/.frontmatter-mcp | キャッシュディレクトリ     |
 
 ## 永続化
 
@@ -240,44 +240,88 @@ VSS 拡張は DuckDB 本体に含まれており、`INSTALL vss; LOAD vss;` で�
 - 永続化は `SET hnsw_enable_experimental_persistence = true` が必要（実験的）
 - 削除は即時反映されない（`PRAGMA hnsw_compact_index()` で圧縮）
 
-## 実装タスク
+## 実装タスク（TDD アプローチ）
 
-### Phase 1: 基盤
+各ステップでテストと実装を同時に進める。`pytest.mark.slow` で実モデルテストを分離。
 
-- [ ] embedding.py: Embedding モジュール作成
-  - [ ] モデルロード（遅延ロード）
-  - [ ] テキスト → ベクトル変換
-  - [ ] embed() 関数の DuckDB 登録
-- [ ] cache.py: キャッシュモジュール作成
-  - [ ] DuckDB 永続化（embeddings.duckdb）
-  - [ ] mtime 比較による差分検出
-- [ ] indexer.py: バックグラウンドインデキシング
-  - [ ] threading による非同期処理
-  - [ ] 状態管理（indexing フラグ）
+### Step 1: Embedding モジュール
 
-### Phase 2: 既存ツール拡張
+対象: `embedding.py`, `test_embedding.py`
 
-- [ ] frontmatter.py: 本文取得の追加
-  - [ ] post.content を返す関数追加
-- [ ] query.py: VSS 拡張のセットアップ
-  - [ ] INSTALL vss; LOAD vss;
-  - [ ] embedding カラムの追加（インデキシング完了時）
-  - [ ] embed() 関数の登録
-- [ ] server.py: 条件付き初期化
-  - [ ] 環境変数による切り替え
-  - [ ] 起動時のバックグラウンドインデキシング
-  - [ ] index_status ツール
-  - [ ] index_refresh ツール
+- [ ] モデルロード（遅延ロード）
+- [ ] テキスト → ベクトル変換
+- [ ] 次元数の自動取得
 
-### Phase 3: テスト
+テスト観点:
 
-- [ ] test_embedding.py: Embedding テスト（モック使用）
-- [ ] test_cache.py: キャッシュテスト
-- [ ] test_indexer.py: インデキシングテスト
-- [ ] test_semantic.py: 統合テスト（query + embed）
-- [ ] pytest.mark.slow で実モデルテストを分離
+- モデルの遅延ロード確認
+- encode() の出力形状
+- 次元数取得
 
-### Phase 4: ドキュメント
+### Step 2: キャッシュモジュール
+
+対象: `cache.py`, `test_cache.py`
+
+- [ ] DuckDB 永続化（embeddings.duckdb）
+- [ ] embeddings / metadata テーブル作成
+- [ ] embedding の保存・取得
+- [ ] mtime 比較による差分検出
+- [ ] モデル変更時のキャッシュ破棄
+
+テスト観点:
+
+- テーブル作成
+- embedding の CRUD
+- mtime 差分検出
+- モデル変更検知
+
+### Step 3: インデキシング
+
+対象: `indexer.py`, `test_indexer.py`
+
+- [ ] threading による非同期処理
+- [ ] 状態管理（indexing フラグ）
+- [ ] 全ファイルインデキシング
+- [ ] 差分更新
+- [ ] 重複呼び出し対応
+
+テスト観点:
+
+- 非同期実行
+- indexing フラグの状態遷移
+- 差分更新の動作
+
+### Step 4: query への統合
+
+対象: `query.py`, `test_query.py`（既存拡張）
+
+- [ ] VSS 拡張のセットアップ（INSTALL vss; LOAD vss;）
+- [ ] embed() 関数の DuckDB 登録
+- [ ] embedding カラムの追加（インデキシング完了時）
+
+テスト観点:
+
+- embed() 関数の動作
+- array_cosine_distance との組み合わせ
+- インデキシング未完了時の挙動
+
+### Step 5: MCP ツール
+
+対象: `server.py`, `test_server.py`（既存拡張）
+
+- [ ] 環境変数による切り替え
+- [ ] 起動時のバックグラウンドインデキシング
+- [ ] index_status ツール
+- [ ] index_refresh ツール
+- [ ] query_inspect の embedding カラム対応
+
+テスト観点:
+
+- 環境変数の読み取り
+- 各ツールのレスポンス形式
+- インデキシング状態による挙動変化
+
+### Step 6: ドキュメント
 
 - [ ] README.md 更新
 - [ ] SETUP.md にセマンティック検索セクション追加
