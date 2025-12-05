@@ -89,7 +89,7 @@ def query(glob: str, sql: str) -> dict[str, Any]:
     # Prepare semantic search if enabled and indexing complete
     conn_setup = None
     if get_settings().enable_semantic and is_indexing_ready():
-        cache = get_embedding_cache(base)
+        cache = get_embedding_cache()
         model = get_embedding_model()
         semantic = SemanticContext(embeddings=cache.get_all(), model=model)
 
@@ -120,9 +120,8 @@ def index_status() -> dict[str, Any]:
     if not get_settings().enable_semantic:
         return {"enabled": False}
 
-    base = get_base_dir()
-    indexer = get_indexer(base)
-    cache = get_embedding_cache(base)
+    indexer = get_indexer()
+    cache = get_embedding_cache()
     model = get_embedding_model()
 
     return {
@@ -152,8 +151,7 @@ def index_refresh() -> dict[str, Any]:
     if not get_settings().enable_semantic:
         return {"error": "Semantic search is disabled"}
 
-    base = get_base_dir()
-    indexer = get_indexer(base)
+    indexer = get_indexer()
     return indexer.start()
 
 

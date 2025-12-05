@@ -9,8 +9,8 @@ import frontmatter
 import numpy as np
 import pytest
 
-import frontmatter_mcp.context as context_module
 import frontmatter_mcp.server as server_module
+from frontmatter_mcp.context import clear_context_cache
 from frontmatter_mcp.settings import get_settings
 
 
@@ -399,15 +399,10 @@ class TestSemanticSearchTools:
     def semantic_base_dir(self, temp_base_dir: Path, monkeypatch: pytest.MonkeyPatch):
         """Enable semantic search for tests."""
         monkeypatch.setenv("FRONTMATTER_ENABLE_SEMANTIC", "true")
-        # Reset semantic components for fresh state
-        context_module._embedding_model = None
-        context_module._embedding_cache = None
-        context_module._indexer = None
+        get_settings.cache_clear()
+        clear_context_cache()
         yield temp_base_dir
-        # Cleanup
-        context_module._embedding_model = None
-        context_module._embedding_cache = None
-        context_module._indexer = None
+        clear_context_cache()
 
     def test_index_status_disabled(self, temp_base_dir: Path) -> None:
         """index_status returns disabled when semantic search is off."""
@@ -422,7 +417,16 @@ class TestSemanticSearchTools:
         mock_model = MagicMock()
         mock_model.model_name = "test-model"
         mock_model.get_dimension.return_value = 256
-        context_module._embedding_model = mock_model
+
+        # Patch both locations where get_embedding_model is imported
+        monkeypatch.setattr(
+            "frontmatter_mcp.server.get_embedding_model",
+            lambda: mock_model,
+        )
+        monkeypatch.setattr(
+            "frontmatter_mcp.context.get_embedding_model",
+            lambda: mock_model,
+        )
 
         result = server_module.index_status()
         assert result["enabled"] is True
@@ -442,15 +446,26 @@ class TestSemanticSearchTools:
         mock_model.model_name = "test-model"
         mock_model.get_dimension.return_value = 256
         mock_model.encode.return_value = np.random.rand(256).astype(np.float32)
-        context_module._embedding_model = mock_model
+
+        # Patch both locations where get_embedding_model is imported
+        monkeypatch.setattr(
+            "frontmatter_mcp.server.get_embedding_model",
+            lambda: mock_model,
+        )
+        monkeypatch.setattr(
+            "frontmatter_mcp.context.get_embedding_model",
+            lambda: mock_model,
+        )
 
         result = server_module.index_refresh()
         assert "message" in result
         assert result["message"] in ["Indexing started", "Indexing already in progress"]
 
         # Wait for indexing to complete
-        if context_module._indexer:
-            context_module._indexer.wait(timeout=5.0)
+        from frontmatter_mcp.context import get_indexer
+
+        indexer = get_indexer()
+        indexer.wait(timeout=5.0)
 
     def test_query_with_semantic_search(
         self, semantic_base_dir: Path, monkeypatch: pytest.MonkeyPatch
@@ -460,12 +475,23 @@ class TestSemanticSearchTools:
         mock_model.model_name = "test-model"
         mock_model.get_dimension.return_value = 256
         mock_model.encode.return_value = np.random.rand(256).astype(np.float32)
-        context_module._embedding_model = mock_model
+
+        # Patch both locations where get_embedding_model is imported
+        monkeypatch.setattr(
+            "frontmatter_mcp.server.get_embedding_model",
+            lambda: mock_model,
+        )
+        monkeypatch.setattr(
+            "frontmatter_mcp.context.get_embedding_model",
+            lambda: mock_model,
+        )
 
         # Start and wait for indexing
         server_module.index_refresh()
-        if context_module._indexer:
-            context_module._indexer.wait(timeout=5.0)
+        from frontmatter_mcp.context import get_indexer
+
+        indexer = get_indexer()
+        indexer.wait(timeout=5.0)
 
         # Query with embedding
         result = server_module.query(
