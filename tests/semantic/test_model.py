@@ -1,8 +1,8 @@
-"""Tests for embedding module."""
+"""Tests for semantic model module."""
 
 import pytest
 
-from frontmatter_mcp.embedding import DEFAULT_MODEL, EmbeddingModel
+from frontmatter_mcp.semantic.model import DEFAULT_MODEL, EmbeddingModel
 
 
 class TestEmbeddingModel:
@@ -61,24 +61,14 @@ class TestEmbeddingModelWithRealModel:
         # ruri-v3-30m has 256 dimensions
         assert dim == 256
 
-    def test_encode_single_text(self) -> None:
-        """Encode single text to vector."""
+    def test_encode(self) -> None:
+        """Encode text to vector."""
         model = EmbeddingModel()
         dim = model.get_dimension()
         embedding = model.encode("テスト文章")
 
         assert embedding.shape == (dim,)
         assert embedding.dtype.kind == "f"  # float type
-
-    def test_encode_batch(self) -> None:
-        """Encode multiple texts to vectors."""
-        model = EmbeddingModel()
-        dim = model.get_dimension()
-        texts = ["文章1", "文章2", "文章3"]
-        embeddings = model.encode_batch(texts)
-
-        assert embeddings.shape == (3, dim)
-        assert embeddings.dtype.kind == "f"
 
     def test_similar_texts_have_similar_embeddings(self) -> None:
         """Similar texts produce similar embeddings."""

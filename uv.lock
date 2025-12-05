@@ -322,6 +322,7 @@ dependencies = [
     { name = "duckdb" },
     { name = "mcp" },
     { name = "pyarrow" },
+    { name = "pydantic-settings" },
     { name = "python-frontmatter" },
 ]
 
@@ -345,6 +346,7 @@ requires-dist = [
     { name = "mcp", specifier = ">=1.0.0" },
     { name = "protobuf", marker = "extra == 'semantic'", specifier = ">=3.0.0" },
     { name = "pyarrow", specifier = ">=22.0.0" },
+    { name = "pydantic-settings", specifier = ">=2.0.0" },
     { name = "python-frontmatter", specifier = ">=1.0.0" },
     { name = "sentence-transformers", marker = "extra == 'semantic'", specifier = ">=2.0.0" },
     { name = "sentencepiece", marker = "extra == 'semantic'", specifier = ">=0.1.0" },

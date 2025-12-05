@@ -198,15 +198,6 @@ class EmbeddingCache:
         result = self.conn.execute("SELECT COUNT(*) FROM embeddings").fetchone()
         return result[0] if result else 0
 
-    def get_all_embeddings(self) -> list[tuple[str, np.ndarray]]:
-        """Get all cached embeddings.
-
-        Returns:
-            List of (path, vector) tuples.
-        """
-        results = self.conn.execute("SELECT path, vector FROM embeddings").fetchall()
-        return [(row[0], np.array(row[1])) for row in results]
-
     def get_all(self) -> dict[str, np.ndarray]:
         """Get all cached embeddings as a dictionary.
 

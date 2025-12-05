@@ -1,11 +1,11 @@
-"""Tests for cache module."""
+"""Tests for semantic cache module."""
 
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-from frontmatter_mcp.cache import CACHE_DB_NAME, EmbeddingCache
+from frontmatter_mcp.semantic.cache import CACHE_DB_NAME, EmbeddingCache
 
 
 class TestEmbeddingCache:
@@ -157,19 +157,17 @@ class TestEmbeddingCache:
         deleted = cache.get_deleted_paths(current_files)
         assert deleted == ["deleted.md"]
 
-    def test_get_all_embeddings(self, cache: EmbeddingCache) -> None:
-        """Get all embeddings."""
+    def test_get_all(self, cache: EmbeddingCache) -> None:
+        """Get all embeddings as dict."""
         vector_a = np.random.rand(256).astype(np.float32)
         vector_b = np.random.rand(256).astype(np.float32)
         cache.set("a.md", 1000.0, vector_a)
         cache.set("b.md", 2000.0, vector_b)
 
-        result = cache.get_all_embeddings()
+        result = cache.get_all()
         assert len(result) == 2
-
-        result_dict = {path: vec for path, vec in result}
-        np.testing.assert_array_almost_equal(result_dict["a.md"], vector_a, decimal=5)
-        np.testing.assert_array_almost_equal(result_dict["b.md"], vector_b, decimal=5)
+        np.testing.assert_array_almost_equal(result["a.md"], vector_a, decimal=5)
+        np.testing.assert_array_almost_equal(result["b.md"], vector_b, decimal=5)
 
 
 class TestEmbeddingCacheModelChange:

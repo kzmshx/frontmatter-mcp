@@ -1,29 +1,10 @@
 """DuckDB query execution module."""
 
 import json
-from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
 
 import duckdb
-import numpy as np
 import pyarrow as pa
-
-from frontmatter_mcp.embedding import EmbeddingModel
-
-
-@dataclass
-class SemanticContext:
-    """Context for semantic search in query execution.
-
-    Bundles embeddings and model together to ensure they are always
-    provided as a pair.
-    """
-
-    embeddings: dict[str, np.ndarray]
-    """Dict mapping file path to embedding vector."""
-
-    model: EmbeddingModel
-    """Embedding model for encode() and embed() function."""
 
 
 def _serialize_value(value: Any) -> str | None:
@@ -42,7 +23,7 @@ def _serialize_value(value: Any) -> str | None:
 def execute_query(
     records: list[dict[str, Any]],
     sql: str,
-    semantic: SemanticContext | None = None,
+    conn_setup: Callable[[duckdb.DuckDBPyConnection], None] | None = None,
 ) -> dict[str, Any]:
     """Execute DuckDB SQL query on frontmatter records.
 
@@ -52,7 +33,9 @@ def execute_query(
     Args:
         records: List of parsed frontmatter records.
         sql: SQL query string. Must reference 'files' table.
-        semantic: Optional semantic search context with embeddings and model.
+        conn_setup: Optional callback to set up the connection before query.
+            When provided, 'files_base' table is registered instead of 'files',
+            allowing the callback to create a 'files' view with additional columns.
 
     Returns:
         Dictionary with results, row_count, and columns.
@@ -82,11 +65,10 @@ def execute_query(
     # Create connection and register table
     conn = duckdb.connect(":memory:")
 
-    # Add embedding column if semantic context is provided
-    if semantic:
-        # Register as files_base, then create files view with embedding
+    if conn_setup:
+        # Register as files_base, then let callback create files view
         conn.register("files_base", table)
-        _setup_semantic_search(conn, semantic)
+        conn_setup(conn)
     else:
         conn.register("files", table)
 
@@ -103,50 +85,3 @@ def execute_query(
         "row_count": len(results),
         "columns": columns,
     }
-
-
-def _setup_semantic_search(
-    conn: duckdb.DuckDBPyConnection,
-    semantic: SemanticContext,
-) -> None:
-    """Set up semantic search capabilities in DuckDB connection.
-
-    Args:
-        conn: DuckDB connection.
-        semantic: Semantic search context with embeddings and model.
-    """
-    # Install and load VSS extension
-    conn.execute("INSTALL vss")
-    conn.execute("LOAD vss")
-
-    # Get dimension from model
-    dim = semantic.model.get_dimension()
-
-    # Register embed() function
-    def embed_func(text: str) -> list[float]:
-        return semantic.model.encode(text).tolist()
-
-    conn.create_function("embed", embed_func, [str], f"FLOAT[{dim}]")
-
-    # Create embeddings table
-    conn.execute(f"""
-        CREATE TABLE embeddings (
-            path TEXT PRIMARY KEY,
-            vector FLOAT[{dim}]
-        )
-    """)
-
-    # Insert embeddings
-    for path, vector in semantic.embeddings.items():
-        conn.execute(
-            "INSERT INTO embeddings (path, vector) VALUES (?, ?)",
-            [path, vector.tolist()],
-        )
-
-    # Create files view with embedding column via JOIN
-    conn.execute("""
-        CREATE VIEW files AS
-        SELECT f.*, e.vector as embedding
-        FROM files_base f
-        LEFT JOIN embeddings e ON f.path = e.path
-    """)

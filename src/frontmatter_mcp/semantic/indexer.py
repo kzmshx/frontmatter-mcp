@@ -1,4 +1,4 @@
-"""Indexer module for background embedding generation."""
+"""Embedding indexer module for background embedding generation."""
 
 import threading
 from pathlib import Path
@@ -6,11 +6,11 @@ from typing import Callable
 
 import frontmatter
 
-from frontmatter_mcp.cache import EmbeddingCache
-from frontmatter_mcp.embedding import EmbeddingModel
+from frontmatter_mcp.semantic.cache import EmbeddingCache
+from frontmatter_mcp.semantic.model import EmbeddingModel
 
 
-class Indexer:
+class EmbeddingIndexer:
     """Background indexer for document embeddings."""
 
     def __init__(

@@ -1,4 +1,4 @@
-"""Tests for indexer module."""
+"""Tests for semantic indexer module."""
 
 import time
 from pathlib import Path
@@ -7,12 +7,11 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from frontmatter_mcp.cache import EmbeddingCache
-from frontmatter_mcp.indexer import Indexer
+from frontmatter_mcp.semantic import EmbeddingCache, EmbeddingIndexer
 
 
-class TestIndexer:
-    """Tests for Indexer class."""
+class TestEmbeddingIndexer:
+    """Tests for EmbeddingIndexer class."""
 
     @pytest.fixture
     def cache_dir(self, tmp_path: Path) -> Path:
@@ -51,8 +50,8 @@ class TestIndexer:
     def test_initial_state(
         self, cache: EmbeddingCache, mock_model: MagicMock, base_dir: Path
     ) -> None:
-        """Indexer starts in non-indexing state."""
-        indexer = Indexer(cache, mock_model, lambda: [], base_dir)
+        """EmbeddingIndexer starts in non-indexing state."""
+        indexer = EmbeddingIndexer(cache, mock_model, lambda: [], base_dir)
         assert indexer.is_indexing is False
         assert indexer.indexed_count == 0
 
@@ -64,7 +63,7 @@ class TestIndexer:
         self._create_md_file(base_dir, "b.md", "Content B")
 
         files = list(base_dir.glob("*.md"))
-        indexer = Indexer(cache, mock_model, lambda: files, base_dir)
+        indexer = EmbeddingIndexer(cache, mock_model, lambda: files, base_dir)
 
         result = indexer.start()
         assert result["message"] == "Indexing started"
@@ -89,7 +88,7 @@ class TestIndexer:
         mock_model.encode.side_effect = slow_encode
 
         files = list(base_dir.glob("*.md"))
-        indexer = Indexer(cache, mock_model, lambda: files, base_dir)
+        indexer = EmbeddingIndexer(cache, mock_model, lambda: files, base_dir)
 
         result1 = indexer.start()
         assert result1["message"] == "Indexing started"
@@ -109,7 +108,7 @@ class TestIndexer:
         file_b = self._create_md_file(base_dir, "b.md", "Content B")
 
         files = [file_a, file_b]
-        indexer = Indexer(cache, mock_model, lambda: files, base_dir)
+        indexer = EmbeddingIndexer(cache, mock_model, lambda: files, base_dir)
 
         # First indexing
         indexer.start()
@@ -136,7 +135,8 @@ class TestIndexer:
         file_a = self._create_md_file(base_dir, "a.md", "Content A")
         file_b = self._create_md_file(base_dir, "b.md", "Content B")
 
-        indexer = Indexer(cache, mock_model, lambda: [file_a, file_b], base_dir)
+        files = [file_a, file_b]
+        indexer = EmbeddingIndexer(cache, mock_model, lambda: files, base_dir)
 
         # First indexing
         indexer.start()
@@ -147,7 +147,7 @@ class TestIndexer:
         file_b.unlink()
 
         # Re-index with only file_a
-        indexer2 = Indexer(cache, mock_model, lambda: [file_a], base_dir)
+        indexer2 = EmbeddingIndexer(cache, mock_model, lambda: [file_a], base_dir)
         indexer2.start()
         indexer2.wait(timeout=5.0)
 
@@ -162,7 +162,7 @@ class TestIndexer:
         self._create_md_file(base_dir, "has_content.md", "Some content")
 
         files = list(base_dir.glob("*.md"))
-        indexer = Indexer(cache, mock_model, lambda: files, base_dir)
+        indexer = EmbeddingIndexer(cache, mock_model, lambda: files, base_dir)
 
         indexer.start()
         indexer.wait(timeout=5.0)
@@ -177,7 +177,7 @@ class TestIndexer:
         self._create_md_file(base_dir, "a.md", "Content")
 
         files = list(base_dir.glob("*.md"))
-        indexer = Indexer(cache, mock_model, lambda: files, base_dir)
+        indexer = EmbeddingIndexer(cache, mock_model, lambda: files, base_dir)
 
         indexer.start()
         result = indexer.wait(timeout=5.0)
@@ -189,7 +189,7 @@ class TestIndexer:
         self, cache: EmbeddingCache, mock_model: MagicMock, base_dir: Path
     ) -> None:
         """Wait returns True when indexing was never started."""
-        indexer = Indexer(cache, mock_model, lambda: [], base_dir)
+        indexer = EmbeddingIndexer(cache, mock_model, lambda: [], base_dir)
         result = indexer.wait(timeout=1.0)
         assert result is True
 
@@ -201,7 +201,7 @@ class TestIndexer:
         self._create_md_file(base_dir, "sub/nested.md", "Nested content")
 
         files = list(base_dir.rglob("*.md"))
-        indexer = Indexer(cache, mock_model, lambda: files, base_dir)
+        indexer = EmbeddingIndexer(cache, mock_model, lambda: files, base_dir)
 
         indexer.start()
         indexer.wait(timeout=5.0)

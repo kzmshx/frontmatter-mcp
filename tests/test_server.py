@@ -9,6 +9,7 @@ import frontmatter
 import numpy as np
 import pytest
 
+import frontmatter_mcp.context as context_module
 import frontmatter_mcp.server as server_module
 
 
@@ -46,10 +47,10 @@ summary: A summary
 """
         )
 
-        # Set the global base_dir
-        server_module._base_dir = base
+        # Set the global base_dir via context module
+        context_module.set_base_dir(base)
         yield base
-        server_module._base_dir = None
+        context_module._base_dir = None
 
 
 class TestQueryInspect:
@@ -392,19 +393,40 @@ class TestBatchArraySort:
 class TestSemanticSearchTools:
     """Tests for semantic search tools."""
 
+    @pytest.fixture(autouse=True)
+    def reset_settings(self):
+        """Reset settings before each test."""
+        import frontmatter_mcp.settings as settings_module
+
+        original_settings = settings_module.Settings()
+        settings_module.settings = original_settings
+        server_module.settings = original_settings
+        yield
+        # Cleanup after test
+        original_settings = settings_module.Settings()
+        settings_module.settings = original_settings
+        server_module.settings = original_settings
+
     @pytest.fixture
     def semantic_base_dir(self, temp_base_dir: Path, monkeypatch: pytest.MonkeyPatch):
         """Enable semantic search for tests."""
         monkeypatch.setenv("FRONTMATTER_ENABLE_SEMANTIC", "true")
+        # Reinitialize settings to pick up env var change
+        import frontmatter_mcp.settings as settings_module
+
+        new_settings = settings_module.Settings()
+        settings_module.settings = new_settings
+        # Also update the reference in server module
+        server_module.settings = new_settings
         # Reset semantic components for fresh state
-        server_module._embedding_model = None
-        server_module._embedding_cache = None
-        server_module._indexer = None
+        context_module._embedding_model = None
+        context_module._embedding_cache = None
+        context_module._indexer = None
         yield temp_base_dir
         # Cleanup
-        server_module._embedding_model = None
-        server_module._embedding_cache = None
-        server_module._indexer = None
+        context_module._embedding_model = None
+        context_module._embedding_cache = None
+        context_module._indexer = None
 
     def test_index_status_disabled(self, temp_base_dir: Path) -> None:
         """index_status returns disabled when semantic search is off."""
@@ -419,7 +441,7 @@ class TestSemanticSearchTools:
         mock_model = MagicMock()
         mock_model.model_name = "test-model"
         mock_model.get_dimension.return_value = 256
-        server_module._embedding_model = mock_model
+        context_module._embedding_model = mock_model
 
         result = server_module.index_status()
         assert result["enabled"] is True
@@ -439,15 +461,15 @@ class TestSemanticSearchTools:
         mock_model.model_name = "test-model"
         mock_model.get_dimension.return_value = 256
         mock_model.encode.return_value = np.random.rand(256).astype(np.float32)
-        server_module._embedding_model = mock_model
+        context_module._embedding_model = mock_model
 
         result = server_module.index_refresh()
         assert "message" in result
         assert result["message"] in ["Indexing started", "Indexing already in progress"]
 
         # Wait for indexing to complete
-        if server_module._indexer:
-            server_module._indexer.wait(timeout=5.0)
+        if context_module._indexer:
+            context_module._indexer.wait(timeout=5.0)
 
     def test_query_with_semantic_search(
         self, semantic_base_dir: Path, monkeypatch: pytest.MonkeyPatch
@@ -457,12 +479,12 @@ class TestSemanticSearchTools:
         mock_model.model_name = "test-model"
         mock_model.get_dimension.return_value = 256
         mock_model.encode.return_value = np.random.rand(256).astype(np.float32)
-        server_module._embedding_model = mock_model
+        context_module._embedding_model = mock_model
 
         # Start and wait for indexing
         server_module.index_refresh()
-        if server_module._indexer:
-            server_module._indexer.wait(timeout=5.0)
+        if context_module._indexer:
+            context_module._indexer.wait(timeout=5.0)
 
         # Query with embedding
         result = server_module.query(

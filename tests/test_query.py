@@ -5,7 +5,8 @@ from unittest.mock import MagicMock
 
 import numpy as np
 
-from frontmatter_mcp.query import SemanticContext, execute_query
+from frontmatter_mcp.query import execute_query
+from frontmatter_mcp.semantic import SemanticContext, setup_semantic_search
 
 
 class TestExecuteQuery:
@@ -216,7 +217,7 @@ class TestSemanticSearch:
         result = execute_query(
             records,
             "SELECT path, embedding FROM files",
-            semantic=semantic,
+            conn_setup=lambda conn: setup_semantic_search(conn, semantic),
         )
 
         assert result["row_count"] == 1
@@ -237,7 +238,7 @@ class TestSemanticSearch:
         result = execute_query(
             records,
             "SELECT path, embed('test query') as query_vec FROM files",
-            semantic=semantic,
+            conn_setup=lambda conn: setup_semantic_search(conn, semantic),
         )
 
         assert result["row_count"] == 1
@@ -269,7 +270,7 @@ class TestSemanticSearch:
             FROM files
             ORDER BY score DESC
             """,
-            semantic=semantic,
+            conn_setup=lambda conn: setup_semantic_search(conn, semantic),
         )
 
         assert result["row_count"] == 2
@@ -292,7 +293,7 @@ class TestSemanticSearch:
         result = execute_query(
             records,
             "SELECT path, embedding FROM files ORDER BY path",
-            semantic=semantic,
+            conn_setup=lambda conn: setup_semantic_search(conn, semantic),
         )
 
         assert result["row_count"] == 2

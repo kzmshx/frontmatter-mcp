@@ -1,7 +1,6 @@
 """MCP Server implementation using FastMCP."""
 
 import glob as globmodule
-import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -9,84 +8,24 @@ from typing import Any
 import frontmatter
 from mcp.server.fastmcp import FastMCP
 
-from frontmatter_mcp.cache import EmbeddingCache
-from frontmatter_mcp.embedding import EmbeddingModel
+from frontmatter_mcp.context import (
+    get_base_dir,
+    get_embedding_cache,
+    get_embedding_model,
+    get_indexer,
+    is_indexing_ready,
+    set_base_dir,
+)
 from frontmatter_mcp.frontmatter import parse_files, update_file
-from frontmatter_mcp.indexer import Indexer
-from frontmatter_mcp.query import SemanticContext, execute_query
+from frontmatter_mcp.query import execute_query
 from frontmatter_mcp.schema import infer_schema
-
-# Global base directory
-_base_dir: Path | None = None
-
-# Semantic search components (lazy-loaded)
-_embedding_model: EmbeddingModel | None = None
-_embedding_cache: EmbeddingCache | None = None
-_indexer: Indexer | None = None
+from frontmatter_mcp.semantic import SemanticContext, setup_semantic_search
+from frontmatter_mcp.settings import settings
 
 mcp = FastMCP("frontmatter-mcp")
 
 
-def get_base_dir() -> Path:
-    """Get the configured base directory."""
-    if _base_dir is None:
-        raise RuntimeError("Base directory not configured. Use --base-dir argument.")
-    return _base_dir
-
-
-def is_semantic_enabled() -> bool:
-    """Check if semantic search is enabled via environment variable."""
-    return os.getenv("FRONTMATTER_ENABLE_SEMANTIC", "").lower() in ("true", "1", "yes")
-
-
-def get_embedding_model() -> EmbeddingModel:
-    """Get or create the embedding model."""
-    global _embedding_model
-    if _embedding_model is None:
-        model_name = os.getenv("FRONTMATTER_EMBEDDING_MODEL")
-        if model_name:
-            _embedding_model = EmbeddingModel(model_name)
-        else:
-            _embedding_model = EmbeddingModel()
-    return _embedding_model
-
-
-def get_embedding_cache() -> EmbeddingCache:
-    """Get or create the embedding cache."""
-    global _embedding_cache
-    if _embedding_cache is None:
-        base = get_base_dir()
-        cache_dir_str = os.getenv("FRONTMATTER_CACHE_DIR")
-        if cache_dir_str:
-            cache_dir = Path(cache_dir_str)
-        else:
-            cache_dir = base / ".frontmatter-mcp"
-
-        model = get_embedding_model()
-        _embedding_cache = EmbeddingCache(
-            cache_dir=cache_dir,
-            model_name=model.model_name,
-            dimension=model.get_dimension(),
-        )
-    return _embedding_cache
-
-
-def get_indexer() -> Indexer:
-    """Get or create the indexer."""
-    global _indexer
-    if _indexer is None:
-        base = get_base_dir()
-        cache = get_embedding_cache()
-        model = get_embedding_model()
-
-        def get_files() -> list[Path]:
-            return list(base.rglob("*.md"))
-
-        _indexer = Indexer(cache, model, get_files, base)
-    return _indexer
-
-
-def collect_files(glob_pattern: str) -> list[Path]:
+def _collect_files(glob_pattern: str) -> list[Path]:
     """Collect files matching the glob pattern."""
     base = get_base_dir()
     pattern = str(base / glob_pattern)
@@ -118,7 +57,7 @@ def query_inspect(glob: str) -> dict[str, Any]:
         Dict with file_count, schema (type, count, nullable, sample_values).
     """
     base = get_base_dir()
-    paths = collect_files(glob)
+    paths = _collect_files(glob)
     records, warnings = parse_files(paths, base)
     schema = infer_schema(records)
 
@@ -146,17 +85,20 @@ def query(glob: str, sql: str) -> dict[str, Any]:
         Dict with results array, row_count, and columns.
     """
     base = get_base_dir()
-    paths = collect_files(glob)
+    paths = _collect_files(glob)
     records, warnings = parse_files(paths, base)
 
     # Prepare semantic search if enabled and indexing complete
-    semantic = None
-    if is_semantic_enabled() and _indexer is not None and not _indexer.is_indexing:
-        cache = get_embedding_cache()
+    conn_setup = None
+    if settings.enable_semantic and is_indexing_ready():
+        cache = get_embedding_cache(base)
         model = get_embedding_model()
         semantic = SemanticContext(embeddings=cache.get_all(), model=model)
 
-    query_result = execute_query(records, sql, semantic=semantic)
+        def conn_setup(conn) -> None:
+            setup_semantic_search(conn, semantic)
+
+    query_result = execute_query(records, sql, conn_setup=conn_setup)
 
     result: dict[str, Any] = {
         "results": query_result["results"],
@@ -177,11 +119,12 @@ def index_status() -> dict[str, Any]:
         Dict with enabled status. If enabled, also includes indexing state,
         indexed_count, model name, and cache_path.
     """
-    if not is_semantic_enabled():
+    if not settings.enable_semantic:
         return {"enabled": False}
 
-    indexer = get_indexer()
-    cache = get_embedding_cache()
+    base = get_base_dir()
+    indexer = get_indexer(base)
+    cache = get_embedding_cache(base)
     model = get_embedding_model()
 
     return {
@@ -208,10 +151,11 @@ def index_refresh() -> dict[str, Any]:
     Notes:
         Call this after editing files during a session to update the index.
     """
-    if not is_semantic_enabled():
+    if not settings.enable_semantic:
         return {"error": "Semantic search is disabled"}
 
-    indexer = get_indexer()
+    base = get_base_dir()
+    indexer = get_indexer(base)
     return indexer.start()
 
 
@@ -273,7 +217,7 @@ def batch_update(
         - Errors in individual files are recorded in warnings, not raised.
     """
     base = get_base_dir().resolve()
-    paths = collect_files(glob)
+    paths = _collect_files(glob)
 
     updated_files: list[str] = []
     warnings: list[str] = []
@@ -328,7 +272,7 @@ def batch_array_add(
     """
 
     base = get_base_dir().resolve()
-    paths = collect_files(glob)
+    paths = _collect_files(glob)
 
     updated_files: list[str] = []
     warnings: list[str] = []
@@ -396,7 +340,7 @@ def batch_array_remove(
     """
 
     base = get_base_dir().resolve()
-    paths = collect_files(glob)
+    paths = _collect_files(glob)
 
     updated_files: list[str] = []
     warnings: list[str] = []
@@ -463,7 +407,7 @@ def batch_array_replace(
     """
 
     base = get_base_dir().resolve()
-    paths = collect_files(glob)
+    paths = _collect_files(glob)
 
     updated_files: list[str] = []
     warnings: list[str] = []
@@ -530,7 +474,7 @@ def batch_array_sort(
     """
 
     base = get_base_dir().resolve()
-    paths = collect_files(glob)
+    paths = _collect_files(glob)
 
     updated_files: list[str] = []
     warnings: list[str] = []
@@ -585,8 +529,6 @@ def batch_array_sort(
 
 def main() -> None:
     """Entry point for the MCP server."""
-    global _base_dir
-
     # Parse --base-dir argument
     args = sys.argv[1:]
     if "--base-dir" not in args:
@@ -600,12 +542,13 @@ def main() -> None:
         sys.exit(1)
 
     base_dir_str = args[base_dir_idx + 1]
-    _base_dir = Path(base_dir_str).resolve()
+    base_dir = Path(base_dir_str).resolve()
 
-    if not _base_dir.is_dir():
-        print(f"Error: Base directory does not exist: {_base_dir}", file=sys.stderr)
+    if not base_dir.is_dir():
+        print(f"Error: Base directory does not exist: {base_dir}", file=sys.stderr)
         sys.exit(1)
 
+    set_base_dir(base_dir)
     mcp.run()
 
 

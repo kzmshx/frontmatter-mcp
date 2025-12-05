@@ -1,4 +1,4 @@
-"""Embedding module for semantic search."""
+"""Embedding model module for semantic search."""
 
 import numpy as np
 from sentence_transformers import SentenceTransformer
@@ -67,14 +67,3 @@ class EmbeddingModel:
             Embedding vector as numpy array.
         """
         return self.model.encode(text)
-
-    def encode_batch(self, texts: list[str]) -> np.ndarray:
-        """Encode multiple texts to embedding vectors.
-
-        Args:
-            texts: List of texts to encode.
-
-        Returns:
-            Embedding vectors as 2D numpy array (n_texts, dimension).
-        """
-        return self.model.encode(texts)
