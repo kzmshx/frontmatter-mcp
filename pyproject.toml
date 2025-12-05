@@ -7,18 +7,17 @@ license = { file = "LICENSE" }
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-  "mcp>=1.0.0",
   "duckdb>=1.0.0",
-  "python-frontmatter>=1.0.0",
+  "fastmcp>=2.13.3",
   "pyarrow>=22.0.0",
   "pydantic-settings>=2.0.0",
-  "fastmcp>=2.13.3",
+  "python-frontmatter>=1.0.0",
 ]
 
 [project.optional-dependencies]
 semantic = [
-  "sentence-transformers>=2.0.0",
   "protobuf>=3.0.0",
+  "sentence-transformers>=2.0.0",
   "sentencepiece>=0.1.0",
 ]
 
@@ -38,13 +37,13 @@ packages = ["src/frontmatter_mcp"]
 
 [dependency-groups]
 dev = [
-    "ruff>=0.14.0",
+    "numpy>=2.0.0",
+    "protobuf>=3.0.0",
     "pytest>=8.0.0",
     "pytest-github-actions-annotate-failures>=0.2.0",
-    "numpy>=2.0.0",
+    "ruff>=0.14.0",
     "sentence-transformers>=2.0.0",
     "sentencepiece>=0.1.0",
-    "protobuf>=3.0.0",
 ]
 
 [tool.ruff.lint]
