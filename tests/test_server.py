@@ -98,6 +98,9 @@ class TestQuery:
             "SELECT path FROM files WHERE date >= '2025-11-26'",
         )
         assert result["row_count"] == 2
+        paths = [r["path"] for r in result["results"]]
+        assert "a.md" in paths
+        assert "b.md" in paths
 
     def test_tag_contains(self, temp_base_dir: Path) -> None:
         """Filter by tag using from_json."""
@@ -171,6 +174,8 @@ class TestBatchUpdate:
         """Set a property on all matching files."""
         result = _call(server_module.batch_update, "*.md", set={"status": "reviewed"})
         assert result["updated_count"] == 2
+        assert "a.md" in result["updated_files"]
+        assert "b.md" in result["updated_files"]
 
         post = frontmatter.load(temp_base_dir / "a.md")
         assert post["status"] == "reviewed"
