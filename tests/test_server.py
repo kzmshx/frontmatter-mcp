@@ -11,10 +11,11 @@ import pytest
 
 import frontmatter_mcp.context as context_module
 import frontmatter_mcp.server as server_module
+from frontmatter_mcp.settings import get_settings
 
 
 @pytest.fixture
-def temp_base_dir():
+def temp_base_dir(monkeypatch: pytest.MonkeyPatch):
     """Create a temporary directory with test markdown files."""
     with tempfile.TemporaryDirectory() as tmpdir:
         base = Path(tmpdir)
@@ -47,10 +48,11 @@ summary: A summary
 """
         )
 
-        # Set the global base_dir via context module
-        context_module.set_base_dir(base)
+        # Set base_dir via environment variable and clear cache
+        monkeypatch.setenv("FRONTMATTER_BASE_DIR", str(base))
+        get_settings.cache_clear()
         yield base
-        context_module._base_dir = None
+        get_settings.cache_clear()
 
 
 class TestQueryInspect:
@@ -393,31 +395,10 @@ class TestBatchArraySort:
 class TestSemanticSearchTools:
     """Tests for semantic search tools."""
 
-    @pytest.fixture(autouse=True)
-    def reset_settings(self):
-        """Reset settings before each test."""
-        import frontmatter_mcp.settings as settings_module
-
-        original_settings = settings_module.Settings()
-        settings_module.settings = original_settings
-        server_module.settings = original_settings
-        yield
-        # Cleanup after test
-        original_settings = settings_module.Settings()
-        settings_module.settings = original_settings
-        server_module.settings = original_settings
-
     @pytest.fixture
     def semantic_base_dir(self, temp_base_dir: Path, monkeypatch: pytest.MonkeyPatch):
         """Enable semantic search for tests."""
         monkeypatch.setenv("FRONTMATTER_ENABLE_SEMANTIC", "true")
-        # Reinitialize settings to pick up env var change
-        import frontmatter_mcp.settings as settings_module
-
-        new_settings = settings_module.Settings()
-        settings_module.settings = new_settings
-        # Also update the reference in server module
-        server_module.settings = new_settings
         # Reset semantic components for fresh state
         context_module._embedding_model = None
         context_module._embedding_cache = None

@@ -1,5 +1,6 @@
 """Settings module for frontmatter-mcp."""
 
+from functools import lru_cache
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -12,6 +13,7 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables.
 
     Environment variables:
+        FRONTMATTER_BASE_DIR: Base directory path (required)
         FRONTMATTER_ENABLE_SEMANTIC: Enable semantic search (default: false)
         FRONTMATTER_EMBEDDING_MODEL: Embedding model name (default: auto)
         FRONTMATTER_CACHE_DIR: Cache directory path (default: base_dir/.frontmatter-mcp)
@@ -19,6 +21,7 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="FRONTMATTER_")
 
+    base_dir: Path
     enable_semantic: bool = False
     embedding_model: str | None = None
     cache_dir: Path | None = None
@@ -37,5 +40,17 @@ class Settings(BaseSettings):
         return base_dir / DEFAULT_CACHE_DIR_NAME
 
 
-# Global settings instance (read-only after creation)
-settings = Settings()
+@lru_cache
+def get_settings() -> Settings:
+    """Get the cached settings instance.
+
+    Settings are read from environment variables on first call and cached.
+    Use get_settings.cache_clear() in tests to reset.
+
+    Returns:
+        Cached Settings instance.
+
+    Raises:
+        ValidationError: If required environment variables are not set.
+    """
+    return Settings()

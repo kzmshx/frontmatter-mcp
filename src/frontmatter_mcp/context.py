@@ -3,10 +3,7 @@
 from pathlib import Path
 
 from frontmatter_mcp.semantic import EmbeddingCache, EmbeddingIndexer, EmbeddingModel
-from frontmatter_mcp.settings import settings
-
-# Global base directory
-_base_dir: Path | None = None
+from frontmatter_mcp.settings import get_settings
 
 # Semantic search components (lazy-loaded)
 _embedding_model: EmbeddingModel | None = None
@@ -14,23 +11,20 @@ _embedding_cache: EmbeddingCache | None = None
 _indexer: EmbeddingIndexer | None = None
 
 
-def set_base_dir(path: Path) -> None:
-    """Set the base directory."""
-    global _base_dir
-    _base_dir = path
-
-
 def get_base_dir() -> Path:
-    """Get the configured base directory."""
-    if _base_dir is None:
-        raise RuntimeError("Base directory not configured. Use --base-dir argument.")
-    return _base_dir
+    """Get the configured base directory from settings.
+
+    Returns:
+        Resolved base directory path.
+    """
+    return get_settings().base_dir.resolve()
 
 
 def get_embedding_model() -> EmbeddingModel:
     """Get or create the embedding model."""
     global _embedding_model
     if _embedding_model is None:
+        settings = get_settings()
         if settings.embedding_model:
             _embedding_model = EmbeddingModel(settings.embedding_model)
         else:
@@ -49,7 +43,7 @@ def get_embedding_cache(base_dir: Path) -> EmbeddingCache:
     """
     global _embedding_cache
     if _embedding_cache is None:
-        cache_dir = settings.get_cache_dir(base_dir)
+        cache_dir = get_settings().get_cache_dir(base_dir)
         model = get_embedding_model()
         _embedding_cache = EmbeddingCache(
             cache_dir=cache_dir,

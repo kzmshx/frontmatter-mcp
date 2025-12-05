@@ -1,7 +1,6 @@
 """MCP Server implementation using FastMCP."""
 
 import glob as globmodule
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -14,13 +13,12 @@ from frontmatter_mcp.context import (
     get_embedding_model,
     get_indexer,
     is_indexing_ready,
-    set_base_dir,
 )
 from frontmatter_mcp.frontmatter import parse_files, update_file
 from frontmatter_mcp.query import execute_query
 from frontmatter_mcp.schema import infer_schema
 from frontmatter_mcp.semantic import SemanticContext, setup_semantic_search
-from frontmatter_mcp.settings import settings
+from frontmatter_mcp.settings import get_settings
 
 mcp = FastMCP("frontmatter-mcp")
 
@@ -90,7 +88,7 @@ def query(glob: str, sql: str) -> dict[str, Any]:
 
     # Prepare semantic search if enabled and indexing complete
     conn_setup = None
-    if settings.enable_semantic and is_indexing_ready():
+    if get_settings().enable_semantic and is_indexing_ready():
         cache = get_embedding_cache(base)
         model = get_embedding_model()
         semantic = SemanticContext(embeddings=cache.get_all(), model=model)
@@ -119,7 +117,7 @@ def index_status() -> dict[str, Any]:
         Dict with enabled status. If enabled, also includes indexing state,
         indexed_count, model name, and cache_path.
     """
-    if not settings.enable_semantic:
+    if not get_settings().enable_semantic:
         return {"enabled": False}
 
     base = get_base_dir()
@@ -151,7 +149,7 @@ def index_refresh() -> dict[str, Any]:
     Notes:
         Call this after editing files during a session to update the index.
     """
-    if not settings.enable_semantic:
+    if not get_settings().enable_semantic:
         return {"error": "Semantic search is disabled"}
 
     base = get_base_dir()
@@ -528,27 +526,15 @@ def batch_array_sort(
 
 
 def main() -> None:
-    """Entry point for the MCP server."""
-    # Parse --base-dir argument
-    args = sys.argv[1:]
-    if "--base-dir" not in args:
-        print("Error: --base-dir argument is required", file=sys.stderr)
-        print("Usage: frontmatter-mcp --base-dir /path", file=sys.stderr)
-        sys.exit(1)
+    """Entry point for the MCP server.
 
-    base_dir_idx = args.index("--base-dir")
-    if base_dir_idx + 1 >= len(args):
-        print("Error: --base-dir requires a value", file=sys.stderr)
-        sys.exit(1)
-
-    base_dir_str = args[base_dir_idx + 1]
-    base_dir = Path(base_dir_str).resolve()
-
+    Requires FRONTMATTER_BASE_DIR environment variable to be set.
+    """
+    # Validate base_dir on startup
+    base_dir = get_base_dir()
     if not base_dir.is_dir():
-        print(f"Error: Base directory does not exist: {base_dir}", file=sys.stderr)
-        sys.exit(1)
+        raise RuntimeError(f"Base directory does not exist: {base_dir}")
 
-    set_base_dir(base_dir)
     mcp.run()
 
 

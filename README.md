@@ -9,7 +9,10 @@ An MCP server for querying Markdown frontmatter with DuckDB SQL.
   "mcpServers": {
     "frontmatter": {
       "command": "uvx",
-      "args": ["frontmatter-mcp", "--base-dir", "/path/to/markdown/directory"]
+      "args": ["frontmatter-mcp"],
+      "env": {
+        "FRONTMATTER_BASE_DIR": "/path/to/markdown/directory"
+      }
     }
   }
 }
@@ -24,12 +27,9 @@ To enable semantic search, add `sentence-transformers` and set the environment v
   "mcpServers": {
     "frontmatter": {
       "command": "uvx",
-      "args": [
-        "--with", "sentence-transformers",
-        "frontmatter-mcp",
-        "--base-dir", "/path/to/markdown/directory"
-      ],
+      "args": ["--with", "sentence-transformers", "frontmatter-mcp"],
       "env": {
+        "FRONTMATTER_BASE_DIR": "/path/to/markdown/directory",
         "FRONTMATTER_ENABLE_SEMANTIC": "true"
       }
     }
@@ -304,11 +304,12 @@ LIMIT 10
 
 Environment variables:
 
-| Variable                    | Default                       | Description                   |
-| --------------------------- | ----------------------------- | ----------------------------- |
-| FRONTMATTER_ENABLE_SEMANTIC | false                         | Enable semantic search        |
-| FRONTMATTER_EMBEDDING_MODEL | cl-nagoya/ruri-v3-30m         | Embedding model name          |
-| FRONTMATTER_CACHE_DIR       | `--base-dir`/.frontmatter-mcp | Cache directory for embeddings|
+| Variable                    | Default                          | Description                   |
+| --------------------------- | -------------------------------- | ----------------------------- |
+| FRONTMATTER_BASE_DIR        | (required)                       | Base directory for files      |
+| FRONTMATTER_ENABLE_SEMANTIC | false                            | Enable semantic search        |
+| FRONTMATTER_EMBEDDING_MODEL | cl-nagoya/ruri-v3-30m            | Embedding model name          |
+| FRONTMATTER_CACHE_DIR       | BASE_DIR/.frontmatter-mcp        | Cache directory for embeddings|
 
 ## License
 
