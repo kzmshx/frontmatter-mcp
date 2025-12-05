@@ -1,11 +1,16 @@
 """Schema inference module."""
 
 from collections import defaultdict
-from typing import Any
+from typing import Any, Callable
+
+# Type alias for schema extender function
+SchemaExtender = Callable[[dict[str, dict[str, Any]], list[dict[str, Any]]], None]
 
 
 def infer_schema(
-    records: list[dict[str, Any]], max_samples: int = 5
+    records: list[dict[str, Any]],
+    max_samples: int = 5,
+    schema_extender: SchemaExtender | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Collect schema information from parsed records.
 
@@ -16,6 +21,8 @@ def infer_schema(
     Args:
         records: List of parsed frontmatter records.
         max_samples: Maximum number of sample values to include.
+        schema_extender: Optional callback to extend schema with additional fields.
+            Receives (schema, records) and should mutate schema in place.
 
     Returns:
         Schema dict with count, nullable, sample_values for each property.
@@ -51,5 +58,8 @@ def infer_schema(
             "nullable": count < total_files,
             "sample_values": samples,
         }
+
+    if schema_extender:
+        schema_extender(schema, records)
 
     return schema

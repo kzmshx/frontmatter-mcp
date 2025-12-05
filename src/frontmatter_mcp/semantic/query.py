@@ -70,3 +70,31 @@ def setup_semantic_search(
         FROM files_base f
         LEFT JOIN embeddings e ON f.path = e.path
     """)
+
+
+def extend_schema_semantic(
+    schema: dict[str, dict],
+    records: list[dict],
+    model: "EmbeddingModel",
+) -> None:
+    """Extend schema with semantic search fields.
+
+    Args:
+        schema: Schema dict to extend (mutated in place).
+        records: List of records (used for count).
+        model: Embedding model for dimension info.
+    """
+    dim = model.get_dimension()
+    schema["embedding"] = {
+        "type": f"FLOAT[{dim}]",
+        "count": len(records),
+        "nullable": False,
+        "description": "Document embedding vector for semantic search",
+        "functions": {
+            "embed": f"embed(text) -> FLOAT[{dim}]",
+        },
+        "example": (
+            "SELECT path, 1 - array_cosine_distance(embedding, "
+            "embed('search query')) as score FROM files ORDER BY score DESC"
+        ),
+    }

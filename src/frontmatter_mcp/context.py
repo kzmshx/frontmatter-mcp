@@ -3,7 +3,12 @@
 from functools import lru_cache
 from pathlib import Path
 
-from frontmatter_mcp.semantic import EmbeddingCache, EmbeddingIndexer, EmbeddingModel
+from frontmatter_mcp.semantic import (
+    EmbeddingCache,
+    EmbeddingIndexer,
+    EmbeddingModel,
+    IndexerState,
+)
 from frontmatter_mcp.settings import get_settings
 
 
@@ -53,9 +58,9 @@ def is_indexing_ready() -> bool:
     """Check if indexing is complete and ready for semantic search.
 
     Returns:
-        True if indexer exists and is not currently indexing.
+        True if indexer state is READY (indexing completed at least once).
     """
-    return not get_indexer().is_indexing
+    return get_indexer().state == IndexerState.READY
 
 
 def clear_context_cache() -> None:

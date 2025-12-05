@@ -448,10 +448,12 @@ class TestSemanticSearchTools:
     def test_index_status_enabled(
         self, semantic_base_dir: Path, mock_embedding_model: MagicMock
     ) -> None:
-        """index_status returns indexing state when semantic search is enabled."""
+        """index_status returns state and indexed_count when enabled."""
         result = _call(server_module.index_status)
-        assert "indexing" in result
-        assert isinstance(result["indexing"], bool)
+        assert "state" in result
+        assert result["state"] in ["idle", "indexing", "ready"]
+        assert "indexed_count" in result
+        assert isinstance(result["indexed_count"], int)
 
     def test_index_refresh_enabled(
         self, semantic_base_dir: Path, mock_embedding_model: MagicMock
@@ -486,3 +488,18 @@ class TestSemanticSearchTools:
 
         assert result["row_count"] == 2
         assert "score" in result["columns"]
+
+    def test_query_inspect_includes_embedding(
+        self, semantic_base_dir: Path, mock_embedding_model: MagicMock
+    ) -> None:
+        """query_inspect includes embedding in schema when semantic search ready."""
+        _call(server_module.index_refresh)
+        from frontmatter_mcp.context import get_indexer
+
+        get_indexer().wait(timeout=5.0)
+
+        result = _call(server_module.query_inspect, "**/*.md")
+
+        assert "embedding" in result["schema"]
+        assert result["schema"]["embedding"]["type"] == "FLOAT[256]"
+        assert "embed" in result["schema"]["embedding"]["functions"]

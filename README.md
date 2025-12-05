@@ -76,6 +76,23 @@ Get schema information from frontmatter across files.
     "tags": { "type": "array", "count": 150, "nullable": true }
   }
 }
+
+// Output (with semantic search ready)
+{
+  "file_count": 186,
+  "schema": {
+    "date": { "type": "string", "count": 180, "nullable": true },
+    "tags": { "type": "array", "count": 150, "nullable": true },
+    "embedding": {
+      "type": "FLOAT[256]",
+      "count": 186,
+      "nullable": false,
+      "description": "Document embedding vector for semantic search",
+      "functions": { "embed": "embed(text) -> FLOAT[256]" },
+      "example": "SELECT path, 1 - array_cosine_distance(embedding, embed('search query')) as score FROM files ORDER BY score DESC"
+    }
+  }
+}
 ```
 
 ### query
@@ -238,11 +255,14 @@ This tool is only available when `FRONTMATTER_ENABLE_SEMANTIC=true`.
 **Example:**
 
 ```json
-// Output
-{ "indexing": false }
+// Output (not started)
+{ "state": "idle", "indexed_count": 0 }
 
-// Output (when indexing in progress)
-{ "indexing": true }
+// Output (indexing in progress)
+{ "state": "indexing", "indexed_count": 150 }
+
+// Output (ready)
+{ "state": "ready", "indexed_count": 665 }
 ```
 
 ### index_refresh
@@ -255,10 +275,10 @@ This tool is only available when `FRONTMATTER_ENABLE_SEMANTIC=true`.
 
 ```json
 // Output
-{ "message": "Indexing started", "target_count": 665 }
+{ "state": "indexing", "message": "Indexing started", "target_count": 665 }
 
 // Output (when already indexing)
-{ "message": "Indexing already in progress", "indexing": true }
+{ "state": "indexing", "message": "Indexing already in progress" }
 ```
 
 ## Technical Notes

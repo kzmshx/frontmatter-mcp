@@ -17,7 +17,11 @@ from frontmatter_mcp.context import (
 from frontmatter_mcp.frontmatter import parse_files, update_file
 from frontmatter_mcp.query import execute_query
 from frontmatter_mcp.schema import infer_schema
-from frontmatter_mcp.semantic import SemanticContext, setup_semantic_search
+from frontmatter_mcp.semantic import (
+    SemanticContext,
+    extend_schema_semantic,
+    setup_semantic_search,
+)
 from frontmatter_mcp.settings import get_settings
 
 mcp = FastMCP("frontmatter-mcp")
@@ -53,11 +57,21 @@ def query_inspect(glob: str) -> dict[str, Any]:
 
     Returns:
         Dict with file_count, schema (type, count, nullable, sample_values).
+        If semantic search is enabled and ready, schema includes embedding field.
     """
     base = get_base_dir()
     paths = _collect_files(glob)
     records, warnings = parse_files(paths, base)
-    schema = infer_schema(records)
+
+    # Prepare schema extender if semantic search is ready
+    schema_extender = None
+    if get_settings().enable_semantic and is_indexing_ready():
+        model = get_embedding_model()
+
+        def schema_extender(schema: dict, recs: list) -> None:
+            extend_schema_semantic(schema, recs, model)
+
+    schema = infer_schema(records, schema_extender=schema_extender)
 
     result: dict[str, Any] = {
         "file_count": len(records),
@@ -114,9 +128,16 @@ def index_status() -> dict[str, Any]:
     """Get the status of the semantic search index.
 
     Returns:
-        Dict with indexing state.
+        Dict with state ("idle", "indexing", "ready") and indexed_count.
+        - idle: Indexing has never been started
+        - indexing: Indexing is in progress (indexed_count shows progress)
+        - ready: Indexing completed, embed() and embedding column available
     """
-    return {"indexing": get_indexer().is_indexing}
+    indexer = get_indexer()
+    return {
+        "state": indexer.state.value,
+        "indexed_count": indexer.indexed_count,
+    }
 
 
 @mcp.tool(enabled=False)

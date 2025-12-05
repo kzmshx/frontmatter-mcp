@@ -1,6 +1,7 @@
 """Embedding indexer module for background embedding generation."""
 
 import threading
+from enum import Enum
 from pathlib import Path
 from typing import Callable
 
@@ -8,6 +9,14 @@ import frontmatter
 
 from frontmatter_mcp.semantic.cache import EmbeddingCache
 from frontmatter_mcp.semantic.model import EmbeddingModel
+
+
+class IndexerState(Enum):
+    """State of the embedding indexer."""
+
+    IDLE = "idle"  # Not started yet
+    INDEXING = "indexing"  # Indexing in progress
+    READY = "ready"  # Indexing completed at least once
 
 
 class EmbeddingIndexer:
@@ -32,15 +41,15 @@ class EmbeddingIndexer:
         self._model = model
         self._get_files = get_files
         self._base_dir = base_dir
-        self._indexing = False
+        self._state = IndexerState.IDLE
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
 
     @property
-    def is_indexing(self) -> bool:
-        """Check if indexing is in progress."""
+    def state(self) -> IndexerState:
+        """Get current indexer state."""
         with self._lock:
-            return self._indexing
+            return self._state
 
     @property
     def indexed_count(self) -> int:
@@ -51,19 +60,19 @@ class EmbeddingIndexer:
         """Start background indexing.
 
         Returns:
-            Status dict with message and target_count.
+            Status dict with state, message, and target_count.
         """
         with self._lock:
-            if self._indexing:
+            if self._state == IndexerState.INDEXING:
                 return {
+                    "state": self._state.value,
                     "message": "Indexing already in progress",
-                    "indexing": True,
                 }
 
             files = self._get_files()
             target_count = len(files)
 
-            self._indexing = True
+            self._state = IndexerState.INDEXING
             self._thread = threading.Thread(
                 target=self._run_indexing,
                 args=(files,),
@@ -72,6 +81,7 @@ class EmbeddingIndexer:
             self._thread.start()
 
             return {
+                "state": self._state.value,
                 "message": "Indexing started",
                 "target_count": target_count,
             }
@@ -86,7 +96,7 @@ class EmbeddingIndexer:
             self._index_files(files)
         finally:
             with self._lock:
-                self._indexing = False
+                self._state = IndexerState.READY
 
     def _index_files(self, files: list[Path]) -> None:
         """Index the given files.

@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from frontmatter_mcp.semantic import EmbeddingCache, EmbeddingIndexer
+from frontmatter_mcp.semantic import EmbeddingCache, EmbeddingIndexer, IndexerState
 
 
 class TestEmbeddingIndexer:
@@ -50,28 +50,32 @@ class TestEmbeddingIndexer:
     def test_initial_state(
         self, cache: EmbeddingCache, mock_model: MagicMock, base_dir: Path
     ) -> None:
-        """EmbeddingIndexer starts in non-indexing state."""
+        """EmbeddingIndexer starts in IDLE state."""
         indexer = EmbeddingIndexer(cache, mock_model, lambda: [], base_dir)
-        assert indexer.is_indexing is False
+        assert indexer.state == IndexerState.IDLE
         assert indexer.indexed_count == 0
 
     def test_start_indexing(
         self, cache: EmbeddingCache, mock_model: MagicMock, base_dir: Path
     ) -> None:
-        """Start begins background indexing."""
+        """Start begins background indexing and transitions to READY on completion."""
         self._create_md_file(base_dir, "a.md", "Content A")
         self._create_md_file(base_dir, "b.md", "Content B")
 
         files = list(base_dir.glob("*.md"))
         indexer = EmbeddingIndexer(cache, mock_model, lambda: files, base_dir)
 
+        # Before start
+        assert indexer.state == IndexerState.IDLE
+
         result = indexer.start()
+        assert result["state"] == "indexing"
         assert result["message"] == "Indexing started"
         assert result["target_count"] == 2
 
         # Wait for completion
         indexer.wait(timeout=5.0)
-        assert indexer.is_indexing is False
+        assert indexer.state == IndexerState.READY
         assert indexer.indexed_count == 2
 
     def test_duplicate_start(
@@ -91,12 +95,13 @@ class TestEmbeddingIndexer:
         indexer = EmbeddingIndexer(cache, mock_model, lambda: files, base_dir)
 
         result1 = indexer.start()
+        assert result1["state"] == "indexing"
         assert result1["message"] == "Indexing started"
 
         # Try to start again while indexing
         result2 = indexer.start()
+        assert result2["state"] == "indexing"
         assert result2["message"] == "Indexing already in progress"
-        assert result2["indexing"] is True
 
         indexer.wait(timeout=5.0)
 
@@ -183,7 +188,7 @@ class TestEmbeddingIndexer:
         result = indexer.wait(timeout=5.0)
 
         assert result is True
-        assert indexer.is_indexing is False
+        assert indexer.state == IndexerState.READY
 
     def test_wait_returns_true_when_not_started(
         self, cache: EmbeddingCache, mock_model: MagicMock, base_dir: Path
