@@ -282,6 +282,7 @@ class TestBatchArrayAdd:
         result = _call(server_module.batch_array_add, "*.md", "date", "value")
         assert result["updated_count"] == 0
         assert "warnings" in result
+        assert len(result["warnings"]) == 2
 
     def test_value_as_array_not_flattened(self, temp_base_dir: Path) -> None:
         """Array value should be added as single element, not flattened."""
