@@ -297,15 +297,15 @@ VSS 拡張は DuckDB 本体に含まれており、`INSTALL vss; LOAD vss;` で�
 - mtime 差分検出
 - モデル変更検知
 
-### Step 3: インデキシング
+### Step 3: インデキシング (完了)
 
 対象: `indexer.py`, `test_indexer.py`
 
-- [ ] threading による非同期処理
-- [ ] 状態管理（indexing フラグ）
-- [ ] 全ファイルインデキシング
-- [ ] 差分更新
-- [ ] 重複呼び出し対応
+- [x] threading による非同期処理
+- [x] 状態管理（indexing フラグ）
+- [x] 全ファイルインデキシング
+- [x] 差分更新
+- [x] 重複呼び出し対応
 
 テスト観点:
 
@@ -313,13 +313,13 @@ VSS 拡張は DuckDB 本体に含まれており、`INSTALL vss; LOAD vss;` で�
 - indexing フラグの状態遷移
 - 差分更新の動作
 
-### Step 4: query への統合
+### Step 4: query への統合 (完了)
 
 対象: `query.py`, `test_query.py`（既存拡張）
 
-- [ ] VSS 拡張のセットアップ（INSTALL vss; LOAD vss;）
-- [ ] embed() 関数の DuckDB 登録
-- [ ] embedding カラムの追加（インデキシング完了時）
+- [x] VSS 拡張のセットアップ（INSTALL vss; LOAD vss;）
+- [x] embed() 関数の DuckDB 登録
+- [x] embedding カラムの追加（インデキシング完了時）
 
 テスト観点:
 
@@ -327,15 +327,14 @@ VSS 拡張は DuckDB 本体に含まれており、`INSTALL vss; LOAD vss;` で�
 - array_cosine_distance との組み合わせ
 - インデキシング未完了時の挙動
 
-### Step 5: MCP ツール
+### Step 5: MCP ツール (完了)
 
 対象: `server.py`, `test_server.py`（既存拡張）
 
-- [ ] 環境変数による切り替え
-- [ ] 起動時のバックグラウンドインデキシング
-- [ ] index_status ツール
-- [ ] index_refresh ツール
-- [ ] query_inspect の embedding カラム対応
+- [x] 環境変数による切り替え
+- [x] index_status ツール
+- [x] index_refresh ツール
+- [x] query での semantic search 統合
 
 テスト観点:
 
@@ -343,7 +342,10 @@ VSS 拡張は DuckDB 本体に含まれており、`INSTALL vss; LOAD vss;` で�
 - 各ツールのレスポンス形式
 - インデキシング状態による挙動変化
 
-### Step 6: ドキュメント
+### Step 6: ドキュメント (完了)
 
-- [ ] README.md 更新
-- [ ] SETUP.md にセマンティック検索セクション追加
+- [x] README.md 更新
+  - uvx でのセマンティック検索設定
+  - index_status / index_refresh ツール
+  - セマンティック検索の使い方
+  - 環境変数一覧

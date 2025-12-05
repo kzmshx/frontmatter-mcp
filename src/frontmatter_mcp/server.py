@@ -1,9 +1,10 @@
 """MCP Server implementation using FastMCP."""
 
 import glob as globmodule
+import os
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import frontmatter
 from mcp.server.fastmcp import FastMCP
@@ -12,8 +13,18 @@ from frontmatter_mcp.frontmatter import parse_files, update_file
 from frontmatter_mcp.query import execute_query
 from frontmatter_mcp.schema import infer_schema
 
+if TYPE_CHECKING:
+    from frontmatter_mcp.cache import EmbeddingCache
+    from frontmatter_mcp.embedding import EmbeddingModel
+    from frontmatter_mcp.indexer import Indexer
+
 # Global base directory
 _base_dir: Path | None = None
+
+# Semantic search components (lazy-loaded)
+_embedding_model: "EmbeddingModel | None" = None
+_embedding_cache: "EmbeddingCache | None" = None
+_indexer: "Indexer | None" = None
 
 mcp = FastMCP("frontmatter-mcp")
 
@@ -23,6 +34,64 @@ def get_base_dir() -> Path:
     if _base_dir is None:
         raise RuntimeError("Base directory not configured. Use --base-dir argument.")
     return _base_dir
+
+
+def is_semantic_enabled() -> bool:
+    """Check if semantic search is enabled via environment variable."""
+    return os.getenv("FRONTMATTER_ENABLE_SEMANTIC", "").lower() in ("true", "1", "yes")
+
+
+def get_embedding_model() -> "EmbeddingModel":
+    """Get or create the embedding model."""
+    global _embedding_model
+    if _embedding_model is None:
+        from frontmatter_mcp.embedding import EmbeddingModel
+
+        model_name = os.getenv("FRONTMATTER_EMBEDDING_MODEL")
+        if model_name:
+            _embedding_model = EmbeddingModel(model_name)
+        else:
+            _embedding_model = EmbeddingModel()
+    return _embedding_model
+
+
+def get_embedding_cache() -> "EmbeddingCache":
+    """Get or create the embedding cache."""
+    global _embedding_cache
+    if _embedding_cache is None:
+        from frontmatter_mcp.cache import EmbeddingCache
+
+        base = get_base_dir()
+        cache_dir_str = os.getenv("FRONTMATTER_CACHE_DIR")
+        if cache_dir_str:
+            cache_dir = Path(cache_dir_str)
+        else:
+            cache_dir = base / ".frontmatter-mcp"
+
+        model = get_embedding_model()
+        _embedding_cache = EmbeddingCache(
+            cache_dir=cache_dir,
+            model_name=model.model_name,
+            dimension=model.get_dimension(),
+        )
+    return _embedding_cache
+
+
+def get_indexer() -> "Indexer":
+    """Get or create the indexer."""
+    global _indexer
+    if _indexer is None:
+        from frontmatter_mcp.indexer import Indexer
+
+        base = get_base_dir()
+        cache = get_embedding_cache()
+        model = get_embedding_model()
+
+        def get_files() -> list[Path]:
+            return list(base.rglob("*.md"))
+
+        _indexer = Indexer(cache, model, get_files, base)
+    return _indexer
 
 
 def collect_files(glob_pattern: str) -> list[Path]:
@@ -65,7 +134,8 @@ def query(glob: str, sql: str) -> dict[str, Any]:
     Args:
         glob: Glob pattern relative to base directory (e.g. "atoms/**/*.md").
         sql: SQL query string. Reference 'files' table. Columns are frontmatter
-            properties plus 'path'.
+            properties plus 'path'. If semantic search is enabled and indexing
+            is complete, you can use embed() function and embedding column.
 
     Returns:
         Dict with results array, row_count, and columns.
@@ -73,7 +143,19 @@ def query(glob: str, sql: str) -> dict[str, Any]:
     base = get_base_dir()
     paths = collect_files(glob)
     records, warnings = parse_files(paths, base)
-    query_result = execute_query(records, sql)
+
+    # Prepare semantic search if enabled and indexing complete
+    embeddings = None
+    embedding_model = None
+    if is_semantic_enabled() and _indexer is not None and not _indexer.is_indexing:
+        cache = get_embedding_cache()
+        model = get_embedding_model()
+        embeddings = cache.get_all()
+        embedding_model = model
+
+    query_result = execute_query(
+        records, sql, embeddings=embeddings, embedding_model=embedding_model
+    )
 
     result: dict[str, Any] = {
         "results": query_result["results"],
@@ -84,6 +166,52 @@ def query(glob: str, sql: str) -> dict[str, Any]:
         result["warnings"] = warnings
 
     return result
+
+
+@mcp.tool()
+def index_status() -> dict[str, Any]:
+    """Get the status of the semantic search index.
+
+    Returns:
+        Dict with enabled status. If enabled, also includes indexing state,
+        indexed_count, model name, and cache_path.
+    """
+    if not is_semantic_enabled():
+        return {"enabled": False}
+
+    indexer = get_indexer()
+    cache = get_embedding_cache()
+    model = get_embedding_model()
+
+    return {
+        "enabled": True,
+        "indexing": indexer.is_indexing,
+        "indexed_count": indexer.indexed_count,
+        "model": model.model_name,
+        "cache_path": str(cache.cache_path),
+    }
+
+
+@mcp.tool()
+def index_refresh() -> dict[str, Any]:
+    """Refresh the semantic search index (differential update).
+
+    Starts background indexing. On first run, indexes all files.
+    Subsequent runs only update files changed since last index (by mtime).
+
+    If indexing is already in progress, returns current status.
+
+    Returns:
+        Dict with message and target_count, or error if disabled.
+
+    Notes:
+        Call this after editing files during a session to update the index.
+    """
+    if not is_semantic_enabled():
+        return {"error": "Semantic search is disabled"}
+
+    indexer = get_indexer()
+    return indexer.start()
 
 
 @mcp.tool()

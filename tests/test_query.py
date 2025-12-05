@@ -1,6 +1,9 @@
 """Tests for DuckDB query module."""
 
 from datetime import date
+from unittest.mock import MagicMock
+
+import numpy as np
 
 from frontmatter_mcp.query import execute_query
 
@@ -189,3 +192,111 @@ class TestExecuteQuery:
         assert values["c.md"] == "3.14"
         assert values["d.md"] == "True"
         assert values["e.md"] == '["a", "b"]'
+
+
+class TestSemanticSearch:
+    """Tests for semantic search integration."""
+
+    def test_query_without_embeddings(self) -> None:
+        """Query works without embeddings (backward compatibility)."""
+        records = [{"path": "a.md", "title": "A"}]
+        result = execute_query(records, "SELECT * FROM files")
+        assert result["row_count"] == 1
+
+    def test_query_with_embedding_column(self) -> None:
+        """Query includes embedding column when embeddings provided."""
+        records = [{"path": "a.md", "title": "A"}]
+        embeddings = {"a.md": np.random.rand(256).astype(np.float32)}
+
+        mock_model = MagicMock()
+        mock_model.get_dimension.return_value = 256
+        mock_model.encode.return_value = np.random.rand(256).astype(np.float32)
+
+        result = execute_query(
+            records,
+            "SELECT path, embedding FROM files",
+            embeddings=embeddings,
+            embedding_model=mock_model,
+        )
+
+        assert result["row_count"] == 1
+        assert "embedding" in result["columns"]
+        assert result["results"][0]["embedding"] is not None
+
+    def test_embed_function_registered(self) -> None:
+        """embed() function can be used in SQL."""
+        records = [{"path": "a.md", "title": "A"}]
+        embeddings = {"a.md": np.random.rand(256).astype(np.float32)}
+
+        mock_model = MagicMock()
+        mock_model.get_dimension.return_value = 256
+        mock_model.encode.return_value = np.random.rand(256).astype(np.float32)
+
+        # Use embed() function in SQL
+        result = execute_query(
+            records,
+            "SELECT path, embed('test query') as query_vec FROM files",
+            embeddings=embeddings,
+            embedding_model=mock_model,
+        )
+
+        assert result["row_count"] == 1
+        assert "query_vec" in result["columns"]
+        mock_model.encode.assert_called_with("test query")
+
+    def test_cosine_distance_calculation(self) -> None:
+        """array_cosine_distance works with embeddings."""
+        # Create embeddings where a.md is more similar to query than b.md
+        query_vec = np.array([1.0, 0.0, 0.0] + [0.0] * 253, dtype=np.float32)
+        vec_a = np.array([0.9, 0.1, 0.0] + [0.0] * 253, dtype=np.float32)  # Similar
+        vec_b = np.array([0.0, 1.0, 0.0] + [0.0] * 253, dtype=np.float32)  # Different
+
+        records = [
+            {"path": "a.md", "title": "A"},
+            {"path": "b.md", "title": "B"},
+        ]
+        embeddings = {"a.md": vec_a, "b.md": vec_b}
+
+        mock_model = MagicMock()
+        mock_model.get_dimension.return_value = 256
+        mock_model.encode.return_value = query_vec
+
+        result = execute_query(
+            records,
+            """
+            SELECT path, 1 - array_cosine_distance(embedding, embed('query')) as score
+            FROM files
+            ORDER BY score DESC
+            """,
+            embeddings=embeddings,
+            embedding_model=mock_model,
+        )
+
+        assert result["row_count"] == 2
+        # a.md should have higher score (more similar)
+        assert result["results"][0]["path"] == "a.md"
+        assert result["results"][0]["score"] > result["results"][1]["score"]
+
+    def test_embedding_null_for_missing_path(self) -> None:
+        """Embedding is NULL for paths not in embeddings dict."""
+        records = [
+            {"path": "a.md", "title": "A"},
+            {"path": "b.md", "title": "B"},  # No embedding for this
+        ]
+        embeddings = {"a.md": np.random.rand(256).astype(np.float32)}
+
+        mock_model = MagicMock()
+        mock_model.get_dimension.return_value = 256
+
+        result = execute_query(
+            records,
+            "SELECT path, embedding FROM files ORDER BY path",
+            embeddings=embeddings,
+            embedding_model=mock_model,
+        )
+
+        assert result["row_count"] == 2
+        assert result["results"][0]["path"] == "a.md"
+        assert result["results"][0]["embedding"] is not None
+        assert result["results"][1]["path"] == "b.md"
+        assert result["results"][1]["embedding"] is None

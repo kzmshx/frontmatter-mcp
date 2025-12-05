@@ -34,6 +34,11 @@ class EmbeddingCache:
         return self._cache_dir / CACHE_DB_NAME
 
     @property
+    def cache_path(self) -> Path:
+        """Get the path to the cache database (alias for db_path)."""
+        return self.db_path
+
+    @property
     def conn(self) -> duckdb.DuckDBPyConnection:
         """Get the database connection, creating it if necessary."""
         if self._conn is None:
@@ -208,6 +213,17 @@ class EmbeddingCache:
 
         results = self.conn.execute("SELECT path, vector FROM embeddings").fetchall()
         return [(row[0], np.array(row[1])) for row in results]
+
+    def get_all(self) -> dict[str, "np.ndarray"]:
+        """Get all cached embeddings as a dictionary.
+
+        Returns:
+            Dictionary mapping path to embedding vector.
+        """
+        import numpy as np
+
+        results = self.conn.execute("SELECT path, vector FROM embeddings").fetchall()
+        return {row[0]: np.array(row[1]) for row in results}
 
     def close(self) -> None:
         """Close the database connection."""

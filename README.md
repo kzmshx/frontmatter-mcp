@@ -15,6 +15,28 @@ An MCP server for querying Markdown frontmatter with DuckDB SQL.
 }
 ```
 
+### With Semantic Search
+
+To enable semantic search, add `sentence-transformers` and set the environment variable:
+
+```json
+{
+  "mcpServers": {
+    "frontmatter": {
+      "command": "uvx",
+      "args": [
+        "--with", "sentence-transformers",
+        "frontmatter-mcp",
+        "--base-dir", "/path/to/markdown/directory"
+      ],
+      "env": {
+        "FRONTMATTER_ENABLE_SEMANTIC": "true"
+      }
+    }
+  }
+}
+```
+
 ## Installation (Optional)
 
 If you prefer to install globally:
@@ -202,6 +224,40 @@ Sort an array property in multiple files.
 { "updated_count": 20, "updated_files": ["a.md", "b.md", ...] }
 ```
 
+### index_status
+
+Get the status of the semantic search index (requires `FRONTMATTER_ENABLE_SEMANTIC=true`).
+
+**Example:**
+
+```json
+// Output (when disabled)
+{ "enabled": false }
+
+// Output (when enabled)
+{
+  "enabled": true,
+  "indexing": false,
+  "indexed_count": 660,
+  "model": "cl-nagoya/ruri-v3-30m",
+  "cache_path": "/path/to/vault/.frontmatter-mcp/embeddings.duckdb"
+}
+```
+
+### index_refresh
+
+Refresh the semantic search index (differential update).
+
+**Example:**
+
+```json
+// Output
+{ "message": "Indexing started", "target_count": 665 }
+
+// Output (when already indexing)
+{ "message": "Indexing already in progress", "indexing": true }
+```
+
 ## Technical Notes
 
 ### All Values Are Strings
@@ -226,6 +282,33 @@ WHERE tag = 'ai'
 ### Templater Expression Support
 
 Files containing Obsidian Templater expressions (e.g., `<% tp.date.now("YYYY-MM-DD") %>`) are handled gracefully. These expressions are treated as strings and naturally excluded by date filtering.
+
+### Semantic Search
+
+When semantic search is enabled, you can use the `embed()` function and `embedding` column in SQL queries. After running `index_refresh`, the markdown body content is indexed as vectors.
+
+```sql
+-- Find semantically similar documents
+SELECT path, 1 - array_cosine_distance(embedding, embed('feeling better')) as score
+FROM files
+ORDER BY score DESC
+LIMIT 10
+
+-- Combine with frontmatter filters
+SELECT path, date, 1 - array_cosine_distance(embedding, embed('motivation')) as score
+FROM files
+WHERE date >= '2025-11-01'
+ORDER BY score DESC
+LIMIT 10
+```
+
+Environment variables:
+
+| Variable                    | Default                       | Description                   |
+| --------------------------- | ----------------------------- | ----------------------------- |
+| FRONTMATTER_ENABLE_SEMANTIC | false                         | Enable semantic search        |
+| FRONTMATTER_EMBEDDING_MODEL | cl-nagoya/ruri-v3-30m         | Embedding model name          |
+| FRONTMATTER_CACHE_DIR       | `--base-dir`/.frontmatter-mcp | Cache directory for embeddings|
 
 ## License
 

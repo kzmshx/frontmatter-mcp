@@ -3,8 +3,10 @@
 import datetime
 import tempfile
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import frontmatter
+import numpy as np
 import pytest
 
 import frontmatter_mcp.server as server_module
@@ -385,3 +387,92 @@ class TestBatchArraySort:
         result = server_module.batch_array_sort("*.md", "date")
         assert result["updated_count"] == 0
         assert "warnings" in result
+
+
+class TestSemanticSearchTools:
+    """Tests for semantic search tools."""
+
+    @pytest.fixture
+    def semantic_base_dir(self, temp_base_dir: Path, monkeypatch: pytest.MonkeyPatch):
+        """Enable semantic search for tests."""
+        monkeypatch.setenv("FRONTMATTER_ENABLE_SEMANTIC", "true")
+        # Reset semantic components for fresh state
+        server_module._embedding_model = None
+        server_module._embedding_cache = None
+        server_module._indexer = None
+        yield temp_base_dir
+        # Cleanup
+        server_module._embedding_model = None
+        server_module._embedding_cache = None
+        server_module._indexer = None
+
+    def test_index_status_disabled(self, temp_base_dir: Path) -> None:
+        """index_status returns disabled when semantic search is off."""
+        result = server_module.index_status()
+        assert result["enabled"] is False
+        assert "indexing" not in result
+
+    def test_index_status_enabled(
+        self, semantic_base_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """index_status returns status when semantic search is enabled."""
+        mock_model = MagicMock()
+        mock_model.model_name = "test-model"
+        mock_model.get_dimension.return_value = 256
+        server_module._embedding_model = mock_model
+
+        result = server_module.index_status()
+        assert result["enabled"] is True
+        assert "indexing" in result
+        assert result["model"] == "test-model"
+
+    def test_index_refresh_disabled(self, temp_base_dir: Path) -> None:
+        """index_refresh returns error when semantic search is disabled."""
+        result = server_module.index_refresh()
+        assert result["error"] == "Semantic search is disabled"
+
+    def test_index_refresh_enabled(
+        self, semantic_base_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """index_refresh starts indexing when enabled."""
+        mock_model = MagicMock()
+        mock_model.model_name = "test-model"
+        mock_model.get_dimension.return_value = 256
+        mock_model.encode.return_value = np.random.rand(256).astype(np.float32)
+        server_module._embedding_model = mock_model
+
+        result = server_module.index_refresh()
+        assert "message" in result
+        assert result["message"] in ["Indexing started", "Indexing already in progress"]
+
+        # Wait for indexing to complete
+        if server_module._indexer:
+            server_module._indexer.wait(timeout=5.0)
+
+    def test_query_with_semantic_search(
+        self, semantic_base_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """query can use embed() function after indexing."""
+        mock_model = MagicMock()
+        mock_model.model_name = "test-model"
+        mock_model.get_dimension.return_value = 256
+        mock_model.encode.return_value = np.random.rand(256).astype(np.float32)
+        server_module._embedding_model = mock_model
+
+        # Start and wait for indexing
+        server_module.index_refresh()
+        if server_module._indexer:
+            server_module._indexer.wait(timeout=5.0)
+
+        # Query with embedding
+        result = server_module.query(
+            "**/*.md",
+            """SELECT path,
+               1 - array_cosine_distance(embedding, embed('test')) as score
+               FROM files
+               ORDER BY score DESC
+               LIMIT 2""",
+        )
+
+        assert result["row_count"] == 2
+        assert "score" in result["columns"]
