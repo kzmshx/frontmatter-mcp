@@ -23,9 +23,9 @@ class TestEmbeddingCache:
         yield cache
         cache.close()
 
-    def test_db_path(self, cache: EmbeddingCache, cache_dir: Path) -> None:
-        """Database path is correct."""
-        assert cache.db_path == cache_dir / CACHE_DB_NAME
+    def test_cache_path(self, cache: EmbeddingCache, cache_dir: Path) -> None:
+        """Cache path is correct."""
+        assert cache.cache_path == cache_dir / CACHE_DB_NAME
 
     def test_creates_cache_dir(self, cache: EmbeddingCache, cache_dir: Path) -> None:
         """Cache directory is created on connect."""

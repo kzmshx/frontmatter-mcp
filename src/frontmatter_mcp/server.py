@@ -87,16 +87,16 @@ def query(glob: str, sql: str) -> dict[str, Any]:
     records, warnings = parse_files(paths, base)
 
     # Prepare semantic search if enabled and indexing complete
-    conn_setup = None
+    conn_setup_func = None
     if get_settings().enable_semantic and is_indexing_ready():
         cache = get_embedding_cache()
         model = get_embedding_model()
         semantic = SemanticContext(embeddings=cache.get_all(), model=model)
 
-        def conn_setup(conn) -> None:
+        def conn_setup_func(conn) -> None:
             setup_semantic_search(conn, semantic)
 
-    query_result = execute_query(records, sql, conn_setup=conn_setup)
+    query_result = execute_query(records, sql, conn_setup=conn_setup_func)
 
     result: dict[str, Any] = {
         "results": query_result["results"],
@@ -532,6 +532,10 @@ def main() -> None:
     base_dir = get_base_dir()
     if not base_dir.is_dir():
         raise RuntimeError(f"Base directory does not exist: {base_dir}")
+
+    # Start background indexing if semantic search is enabled
+    if get_settings().enable_semantic:
+        get_indexer().start()
 
     mcp.run()
 

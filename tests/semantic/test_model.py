@@ -23,19 +23,6 @@ class TestEmbeddingModel:
         model = EmbeddingModel()
         assert not model.is_loaded
 
-    def test_import_error_without_sentence_transformers(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Raises ImportError when sentence-transformers is missing."""
-        import sys
-
-        # Simulate sentence-transformers not being installed
-        monkeypatch.setitem(sys.modules, "sentence_transformers", None)
-
-        model = EmbeddingModel()
-        with pytest.raises(ImportError, match="sentence-transformers is required"):
-            model._load_model()
-
 
 @pytest.mark.slow
 class TestEmbeddingModelWithRealModel:

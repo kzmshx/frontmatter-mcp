@@ -26,14 +26,9 @@ class EmbeddingCache:
         self._conn: duckdb.DuckDBPyConnection | None = None
 
     @property
-    def db_path(self) -> Path:
+    def cache_path(self) -> Path:
         """Get the path to the cache database."""
         return self._cache_dir / CACHE_DB_NAME
-
-    @property
-    def cache_path(self) -> Path:
-        """Get the path to the cache database (alias for db_path)."""
-        return self.db_path
 
     @property
     def conn(self) -> duckdb.DuckDBPyConnection:
@@ -46,7 +41,7 @@ class EmbeddingCache:
     def _connect(self) -> None:
         """Connect to the database and initialize schema."""
         self._cache_dir.mkdir(parents=True, exist_ok=True)
-        self._conn = duckdb.connect(str(self.db_path))
+        self._conn = duckdb.connect(str(self.cache_path))
         self._init_schema()
         self._check_model_compatibility()
 

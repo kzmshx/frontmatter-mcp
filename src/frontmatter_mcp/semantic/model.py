@@ -34,14 +34,6 @@ class EmbeddingModel:
 
     def _load_model(self) -> None:
         """Load the sentence-transformers model."""
-        try:
-            from sentence_transformers import SentenceTransformer
-        except ImportError as e:
-            raise ImportError(
-                "sentence-transformers is required for semantic search. "
-                "Install it with: pip install sentence-transformers"
-            ) from e
-
         self._model = SentenceTransformer(self._model_name)
 
     @property

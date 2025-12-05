@@ -6,9 +6,6 @@ from pathlib import Path
 from frontmatter_mcp.semantic import EmbeddingCache, EmbeddingIndexer, EmbeddingModel
 from frontmatter_mcp.settings import get_settings
 
-# Indexer reference for is_indexing_ready check
-_indexer: EmbeddingIndexer | None = None
-
 
 def get_base_dir() -> Path:
     """Get the configured base directory from settings.
@@ -45,7 +42,6 @@ def get_embedding_cache() -> EmbeddingCache:
 @lru_cache
 def get_indexer() -> EmbeddingIndexer:
     """Get the cached indexer instance."""
-    global _indexer
     base_dir = get_base_dir()
     cache = get_embedding_cache()
     model = get_embedding_model()
@@ -53,8 +49,7 @@ def get_indexer() -> EmbeddingIndexer:
     def get_files() -> list[Path]:
         return list(base_dir.rglob("*.md"))
 
-    _indexer = EmbeddingIndexer(cache, model, get_files, base_dir)
-    return _indexer
+    return EmbeddingIndexer(cache, model, get_files, base_dir)
 
 
 def is_indexing_ready() -> bool:
@@ -63,12 +58,11 @@ def is_indexing_ready() -> bool:
     Returns:
         True if indexer exists and is not currently indexing.
     """
-    return _indexer is not None and not _indexer.is_indexing
+    return not get_indexer().is_indexing
 
 
 def clear_context_cache() -> None:
     """Clear all cached context instances (for testing)."""
-    global _indexer
     # Check if cache_clear exists (may be replaced by monkeypatch in tests)
     if hasattr(get_embedding_model, "cache_clear"):
         get_embedding_model.cache_clear()
@@ -76,4 +70,3 @@ def clear_context_cache() -> None:
         get_embedding_cache.cache_clear()
     if hasattr(get_indexer, "cache_clear"):
         get_indexer.cache_clear()
-    _indexer = None
