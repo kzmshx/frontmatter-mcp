@@ -10,7 +10,7 @@ import frontmatter
 from mcp.server.fastmcp import FastMCP
 
 from frontmatter_mcp.frontmatter import parse_files, update_file
-from frontmatter_mcp.query import execute_query
+from frontmatter_mcp.query import SemanticContext, execute_query
 from frontmatter_mcp.schema import infer_schema
 
 if TYPE_CHECKING:
@@ -145,17 +145,13 @@ def query(glob: str, sql: str) -> dict[str, Any]:
     records, warnings = parse_files(paths, base)
 
     # Prepare semantic search if enabled and indexing complete
-    embeddings = None
-    embedding_model = None
+    semantic = None
     if is_semantic_enabled() and _indexer is not None and not _indexer.is_indexing:
         cache = get_embedding_cache()
         model = get_embedding_model()
-        embeddings = cache.get_all()
-        embedding_model = model
+        semantic = SemanticContext(embeddings=cache.get_all(), model=model)
 
-    query_result = execute_query(
-        records, sql, embeddings=embeddings, embedding_model=embedding_model
-    )
+    query_result = execute_query(records, sql, semantic=semantic)
 
     result: dict[str, Any] = {
         "results": query_result["results"],

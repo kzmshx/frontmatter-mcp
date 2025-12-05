@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import numpy as np
 
-from frontmatter_mcp.query import execute_query
+from frontmatter_mcp.query import SemanticContext, execute_query
 
 
 class TestExecuteQuery:
@@ -212,11 +212,11 @@ class TestSemanticSearch:
         mock_model.get_dimension.return_value = 256
         mock_model.encode.return_value = np.random.rand(256).astype(np.float32)
 
+        semantic = SemanticContext(embeddings=embeddings, model=mock_model)
         result = execute_query(
             records,
             "SELECT path, embedding FROM files",
-            embeddings=embeddings,
-            embedding_model=mock_model,
+            semantic=semantic,
         )
 
         assert result["row_count"] == 1
@@ -233,11 +233,11 @@ class TestSemanticSearch:
         mock_model.encode.return_value = np.random.rand(256).astype(np.float32)
 
         # Use embed() function in SQL
+        semantic = SemanticContext(embeddings=embeddings, model=mock_model)
         result = execute_query(
             records,
             "SELECT path, embed('test query') as query_vec FROM files",
-            embeddings=embeddings,
-            embedding_model=mock_model,
+            semantic=semantic,
         )
 
         assert result["row_count"] == 1
@@ -261,6 +261,7 @@ class TestSemanticSearch:
         mock_model.get_dimension.return_value = 256
         mock_model.encode.return_value = query_vec
 
+        semantic = SemanticContext(embeddings=embeddings, model=mock_model)
         result = execute_query(
             records,
             """
@@ -268,8 +269,7 @@ class TestSemanticSearch:
             FROM files
             ORDER BY score DESC
             """,
-            embeddings=embeddings,
-            embedding_model=mock_model,
+            semantic=semantic,
         )
 
         assert result["row_count"] == 2
@@ -288,11 +288,11 @@ class TestSemanticSearch:
         mock_model = MagicMock()
         mock_model.get_dimension.return_value = 256
 
+        semantic = SemanticContext(embeddings=embeddings, model=mock_model)
         result = execute_query(
             records,
             "SELECT path, embedding FROM files ORDER BY path",
-            embeddings=embeddings,
-            embedding_model=mock_model,
+            semantic=semantic,
         )
 
         assert result["row_count"] == 2

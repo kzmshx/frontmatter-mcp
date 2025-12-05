@@ -1,5 +1,6 @@
 """Schema inference module."""
 
+from collections import defaultdict
 from typing import Any
 
 
@@ -19,18 +20,14 @@ def infer_schema(
     Returns:
         Schema dict with count, nullable, sample_values for each property.
     """
-    schema: dict[str, dict[str, Any]] = {}
-    property_values: dict[str, list[Any]] = {}
-
+    property_values: dict[str, list[Any]] = defaultdict(list)
     for record in records:
         for key, value in record.items():
-            if key == "path":
-                continue
-            if key not in property_values:
-                property_values[key] = []
-            property_values[key].append(value)
+            if key != "path":
+                property_values[key].append(value)
 
     total_files = len(records)
+    schema: dict[str, dict[str, Any]] = {}
 
     for prop, values in property_values.items():
         non_null_values = [v for v in values if v is not None]
