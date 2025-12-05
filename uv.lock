@@ -469,10 +469,12 @@ semantic = [
 [package.dev-dependencies]
 dev = [
     { name = "numpy" },
+    { name = "protobuf" },
     { name = "pytest" },
     { name = "pytest-github-actions-annotate-failures" },
     { name = "ruff" },
     { name = "sentence-transformers" },
+    { name = "sentencepiece" },
 ]
 
 [package.metadata]
@@ -492,10 +494,12 @@ provides-extras = ["semantic"]
 [package.metadata.requires-dev]
 dev = [
     { name = "numpy", specifier = ">=2.0.0" },
+    { name = "protobuf", specifier = ">=3.0.0" },
     { name = "pytest", specifier = ">=8.0.0" },
     { name = "pytest-github-actions-annotate-failures", specifier = ">=0.2.0" },
     { name = "ruff", specifier = ">=0.14.0" },
     { name = "sentence-transformers", specifier = ">=2.0.0" },
+    { name = "sentencepiece", specifier = ">=0.1.0" },
 ]
 
 [[package]]

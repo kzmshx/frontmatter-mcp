@@ -43,6 +43,8 @@ dev = [
     "pytest-github-actions-annotate-failures>=0.2.0",
     "numpy>=2.0.0",
     "sentence-transformers>=2.0.0",
+    "sentencepiece>=0.1.0",
+    "protobuf>=3.0.0",
 ]
 
 [tool.ruff.lint]
