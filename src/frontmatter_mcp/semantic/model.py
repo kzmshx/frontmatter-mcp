@@ -3,14 +3,11 @@
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-# Default embedding model
-DEFAULT_MODEL = "cl-nagoya/ruri-v3-30m"
-
 
 class EmbeddingModel:
     """Lazy-loading wrapper for sentence-transformers model."""
 
-    def __init__(self, model_name: str = DEFAULT_MODEL) -> None:
+    def __init__(self, model_name: str) -> None:
         """Initialize the embedding model wrapper.
 
         Args:

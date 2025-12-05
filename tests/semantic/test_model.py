@@ -2,25 +2,21 @@
 
 import pytest
 
-from frontmatter_mcp.semantic.model import DEFAULT_MODEL, EmbeddingModel
+from frontmatter_mcp.semantic.model import EmbeddingModel
+from frontmatter_mcp.settings import DEFAULT_EMBEDDING_MODEL
 
 
 class TestEmbeddingModel:
     """Tests for EmbeddingModel class."""
 
-    def test_default_model_name(self) -> None:
-        """Default model name is set correctly."""
-        model = EmbeddingModel()
-        assert model.model_name == DEFAULT_MODEL
-
-    def test_custom_model_name(self) -> None:
-        """Custom model name is preserved."""
+    def test_model_name_is_preserved(self) -> None:
+        """Model name is preserved."""
         model = EmbeddingModel("custom-model")
         assert model.model_name == "custom-model"
 
     def test_lazy_loading(self) -> None:
         """Model is not loaded until accessed."""
-        model = EmbeddingModel()
+        model = EmbeddingModel(DEFAULT_EMBEDDING_MODEL)
         assert not model.is_loaded
 
 
@@ -34,14 +30,14 @@ class TestEmbeddingModelWithRealModel:
 
     def test_model_loads(self) -> None:
         """Model loads successfully."""
-        model = EmbeddingModel()
+        model = EmbeddingModel(DEFAULT_EMBEDDING_MODEL)
         assert model.is_loaded is False
         _ = model.model  # Trigger loading
         assert model.is_loaded is True
 
     def test_get_dimension(self) -> None:
         """Get embedding dimension from model."""
-        model = EmbeddingModel()
+        model = EmbeddingModel(DEFAULT_EMBEDDING_MODEL)
         dim = model.get_dimension()
         assert isinstance(dim, int)
         assert dim > 0
@@ -50,7 +46,7 @@ class TestEmbeddingModelWithRealModel:
 
     def test_encode(self) -> None:
         """Encode text to vector."""
-        model = EmbeddingModel()
+        model = EmbeddingModel(DEFAULT_EMBEDDING_MODEL)
         dim = model.get_dimension()
         embedding = model.encode("テスト文章")
 
@@ -59,7 +55,7 @@ class TestEmbeddingModelWithRealModel:
 
     def test_similar_texts_have_similar_embeddings(self) -> None:
         """Similar texts produce similar embeddings."""
-        model = EmbeddingModel()
+        model = EmbeddingModel(DEFAULT_EMBEDDING_MODEL)
 
         # Similar texts
         text1 = "今日は体調が良い"

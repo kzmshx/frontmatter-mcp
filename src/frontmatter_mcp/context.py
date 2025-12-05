@@ -19,10 +19,7 @@ def get_base_dir() -> Path:
 @lru_cache
 def get_embedding_model() -> EmbeddingModel:
     """Get the cached embedding model instance."""
-    settings = get_settings()
-    if settings.embedding_model:
-        return EmbeddingModel(settings.embedding_model)
-    return EmbeddingModel()
+    return EmbeddingModel(get_settings().embedding_model)
 
 
 @lru_cache

@@ -8,6 +8,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # Default cache directory name
 DEFAULT_CACHE_DIR_NAME = ".frontmatter-mcp"
 
+# Default embedding model
+DEFAULT_EMBEDDING_MODEL = "cl-nagoya/ruri-v3-30m"
+
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables.
@@ -23,7 +26,7 @@ class Settings(BaseSettings):
 
     base_dir: Path
     enable_semantic: bool = False
-    embedding_model: str | None = None
+    embedding_model: str = DEFAULT_EMBEDDING_MODEL
     cache_dir: Path | None = None
 
     def get_cache_dir(self, base_dir: Path) -> Path:
