@@ -2,15 +2,13 @@
 
 import json
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import duckdb
+import numpy as np
 import pyarrow as pa
 
-if TYPE_CHECKING:
-    import numpy as np
-
-    from frontmatter_mcp.embedding import EmbeddingModel
+from frontmatter_mcp.embedding import EmbeddingModel
 
 
 @dataclass
@@ -21,10 +19,10 @@ class SemanticContext:
     provided as a pair.
     """
 
-    embeddings: dict[str, "np.ndarray"]
+    embeddings: dict[str, np.ndarray]
     """Dict mapping file path to embedding vector."""
 
-    model: "EmbeddingModel"
+    model: EmbeddingModel
     """Embedding model for encode() and embed() function."""
 
 

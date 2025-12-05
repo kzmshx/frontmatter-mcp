@@ -4,27 +4,25 @@ import glob as globmodule
 import os
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import frontmatter
 from mcp.server.fastmcp import FastMCP
 
+from frontmatter_mcp.cache import EmbeddingCache
+from frontmatter_mcp.embedding import EmbeddingModel
 from frontmatter_mcp.frontmatter import parse_files, update_file
+from frontmatter_mcp.indexer import Indexer
 from frontmatter_mcp.query import SemanticContext, execute_query
 from frontmatter_mcp.schema import infer_schema
-
-if TYPE_CHECKING:
-    from frontmatter_mcp.cache import EmbeddingCache
-    from frontmatter_mcp.embedding import EmbeddingModel
-    from frontmatter_mcp.indexer import Indexer
 
 # Global base directory
 _base_dir: Path | None = None
 
 # Semantic search components (lazy-loaded)
-_embedding_model: "EmbeddingModel | None" = None
-_embedding_cache: "EmbeddingCache | None" = None
-_indexer: "Indexer | None" = None
+_embedding_model: EmbeddingModel | None = None
+_embedding_cache: EmbeddingCache | None = None
+_indexer: Indexer | None = None
 
 mcp = FastMCP("frontmatter-mcp")
 
@@ -41,12 +39,10 @@ def is_semantic_enabled() -> bool:
     return os.getenv("FRONTMATTER_ENABLE_SEMANTIC", "").lower() in ("true", "1", "yes")
 
 
-def get_embedding_model() -> "EmbeddingModel":
+def get_embedding_model() -> EmbeddingModel:
     """Get or create the embedding model."""
     global _embedding_model
     if _embedding_model is None:
-        from frontmatter_mcp.embedding import EmbeddingModel
-
         model_name = os.getenv("FRONTMATTER_EMBEDDING_MODEL")
         if model_name:
             _embedding_model = EmbeddingModel(model_name)
@@ -55,12 +51,10 @@ def get_embedding_model() -> "EmbeddingModel":
     return _embedding_model
 
 
-def get_embedding_cache() -> "EmbeddingCache":
+def get_embedding_cache() -> EmbeddingCache:
     """Get or create the embedding cache."""
     global _embedding_cache
     if _embedding_cache is None:
-        from frontmatter_mcp.cache import EmbeddingCache
-
         base = get_base_dir()
         cache_dir_str = os.getenv("FRONTMATTER_CACHE_DIR")
         if cache_dir_str:
@@ -77,12 +71,10 @@ def get_embedding_cache() -> "EmbeddingCache":
     return _embedding_cache
 
 
-def get_indexer() -> "Indexer":
+def get_indexer() -> Indexer:
     """Get or create the indexer."""
     global _indexer
     if _indexer is None:
-        from frontmatter_mcp.indexer import Indexer
-
         base = get_base_dir()
         cache = get_embedding_cache()
         model = get_embedding_model()
@@ -100,6 +92,19 @@ def collect_files(glob_pattern: str) -> list[Path]:
     pattern = str(base / glob_pattern)
     matches = globmodule.glob(pattern, recursive=True)
     return [Path(p) for p in matches if Path(p).is_file()]
+
+
+def _build_batch_response(
+    updated_files: list[str], warnings: list[str]
+) -> dict[str, Any]:
+    """Build response dict for batch operations."""
+    response: dict[str, Any] = {
+        "updated_count": len(updated_files),
+        "updated_files": updated_files,
+    }
+    if warnings:
+        response["warnings"] = warnings
+    return response
 
 
 @mcp.tool()
@@ -364,14 +369,7 @@ def batch_array_add(
         except Exception as e:
             warnings.append(f"Failed to update {rel_path}: {e}")
 
-    response: dict[str, Any] = {
-        "updated_count": len(updated_files),
-        "updated_files": updated_files,
-    }
-    if warnings:
-        response["warnings"] = warnings
-
-    return response
+    return _build_batch_response(updated_files, warnings)
 
 
 @mcp.tool()
@@ -436,14 +434,7 @@ def batch_array_remove(
         except Exception as e:
             warnings.append(f"Failed to update {rel_path}: {e}")
 
-    response: dict[str, Any] = {
-        "updated_count": len(updated_files),
-        "updated_files": updated_files,
-    }
-    if warnings:
-        response["warnings"] = warnings
-
-    return response
+    return _build_batch_response(updated_files, warnings)
 
 
 @mcp.tool()
@@ -511,14 +502,7 @@ def batch_array_replace(
         except Exception as e:
             warnings.append(f"Failed to update {rel_path}: {e}")
 
-    response: dict[str, Any] = {
-        "updated_count": len(updated_files),
-        "updated_files": updated_files,
-    }
-    if warnings:
-        response["warnings"] = warnings
-
-    return response
+    return _build_batch_response(updated_files, warnings)
 
 
 @mcp.tool()
@@ -596,14 +580,7 @@ def batch_array_sort(
         except Exception as e:
             warnings.append(f"Failed to update {rel_path}: {e}")
 
-    response: dict[str, Any] = {
-        "updated_count": len(updated_files),
-        "updated_files": updated_files,
-    }
-    if warnings:
-        response["warnings"] = warnings
-
-    return response
+    return _build_batch_response(updated_files, warnings)
 
 
 def main() -> None:

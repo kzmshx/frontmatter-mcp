@@ -1,10 +1,7 @@
 """Embedding module for semantic search."""
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    import numpy as np
-    from sentence_transformers import SentenceTransformer
+import numpy as np
+from sentence_transformers import SentenceTransformer
 
 # Default embedding model
 DEFAULT_MODEL = "cl-nagoya/ruri-v3-30m"
@@ -20,7 +17,7 @@ class EmbeddingModel:
             model_name: Name of the sentence-transformers model to use.
         """
         self._model_name = model_name
-        self._model: "SentenceTransformer | None" = None
+        self._model: SentenceTransformer | None = None
 
     @property
     def model_name(self) -> str:
@@ -60,7 +57,7 @@ class EmbeddingModel:
         """
         return self.model.get_sentence_embedding_dimension()
 
-    def encode(self, text: str) -> "np.ndarray":
+    def encode(self, text: str) -> np.ndarray:
         """Encode text to embedding vector.
 
         Args:
@@ -71,7 +68,7 @@ class EmbeddingModel:
         """
         return self.model.encode(text)
 
-    def encode_batch(self, texts: list[str]) -> "np.ndarray":
+    def encode_batch(self, texts: list[str]) -> np.ndarray:
         """Encode multiple texts to embedding vectors.
 
         Args:

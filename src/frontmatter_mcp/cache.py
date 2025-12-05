@@ -1,12 +1,9 @@
 """Cache module for embedding storage using DuckDB."""
 
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import duckdb
-
-if TYPE_CHECKING:
-    import numpy as np
+import numpy as np
 
 # Cache database filename
 CACHE_DB_NAME = "embeddings.duckdb"
@@ -109,7 +106,7 @@ class EmbeddingCache:
         """Clear all cached embeddings."""
         self.conn.execute("DELETE FROM embeddings")
 
-    def get(self, path: str) -> tuple[float, "np.ndarray"] | None:
+    def get(self, path: str) -> tuple[float, np.ndarray] | None:
         """Get cached embedding for a path.
 
         Args:
@@ -125,11 +122,9 @@ class EmbeddingCache:
         if result is None:
             return None
 
-        import numpy as np
-
         return result[0], np.array(result[1])
 
-    def set(self, path: str, mtime: float, vector: "np.ndarray") -> None:
+    def set(self, path: str, mtime: float, vector: np.ndarray) -> None:
         """Store embedding for a path.
 
         Args:
@@ -203,25 +198,21 @@ class EmbeddingCache:
         result = self.conn.execute("SELECT COUNT(*) FROM embeddings").fetchone()
         return result[0] if result else 0
 
-    def get_all_embeddings(self) -> list[tuple[str, "np.ndarray"]]:
+    def get_all_embeddings(self) -> list[tuple[str, np.ndarray]]:
         """Get all cached embeddings.
 
         Returns:
             List of (path, vector) tuples.
         """
-        import numpy as np
-
         results = self.conn.execute("SELECT path, vector FROM embeddings").fetchall()
         return [(row[0], np.array(row[1])) for row in results]
 
-    def get_all(self) -> dict[str, "np.ndarray"]:
+    def get_all(self) -> dict[str, np.ndarray]:
         """Get all cached embeddings as a dictionary.
 
         Returns:
             Dictionary mapping path to embedding vector.
         """
-        import numpy as np
-
         results = self.conn.execute("SELECT path, vector FROM embeddings").fetchall()
         return {row[0]: np.array(row[1]) for row in results}
 
