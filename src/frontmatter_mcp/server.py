@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import frontmatter
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 
 from frontmatter_mcp.context import (
     get_base_dir,
@@ -109,31 +109,17 @@ def query(glob: str, sql: str) -> dict[str, Any]:
     return result
 
 
-@mcp.tool()
+@mcp.tool(enabled=False)
 def index_status() -> dict[str, Any]:
     """Get the status of the semantic search index.
 
     Returns:
-        Dict with enabled status. If enabled, also includes indexing state,
-        indexed_count, model name, and cache_path.
+        Dict with indexing state.
     """
-    if not get_settings().enable_semantic:
-        return {"enabled": False}
-
-    indexer = get_indexer()
-    cache = get_embedding_cache()
-    model = get_embedding_model()
-
-    return {
-        "enabled": True,
-        "indexing": indexer.is_indexing,
-        "indexed_count": indexer.indexed_count,
-        "model": model.model_name,
-        "cache_path": str(cache.cache_path),
-    }
+    return {"indexing": get_indexer().is_indexing}
 
 
-@mcp.tool()
+@mcp.tool(enabled=False)
 def index_refresh() -> dict[str, Any]:
     """Refresh the semantic search index (differential update).
 
@@ -143,16 +129,12 @@ def index_refresh() -> dict[str, Any]:
     If indexing is already in progress, returns current status.
 
     Returns:
-        Dict with message and target_count, or error if disabled.
+        Dict with message and target_count.
 
     Notes:
         Call this after editing files during a session to update the index.
     """
-    if not get_settings().enable_semantic:
-        return {"error": "Semantic search is disabled"}
-
-    indexer = get_indexer()
-    return indexer.start()
+    return get_indexer().start()
 
 
 @mcp.tool()
@@ -533,8 +515,10 @@ def main() -> None:
     if not base_dir.is_dir():
         raise RuntimeError(f"Base directory does not exist: {base_dir}")
 
-    # Start background indexing if semantic search is enabled
+    # Enable and start semantic search if configured
     if get_settings().enable_semantic:
+        index_status.enable()
+        index_refresh.enable()
         get_indexer().start()
 
     mcp.run()

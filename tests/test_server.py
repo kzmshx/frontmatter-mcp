@@ -14,6 +14,13 @@ from frontmatter_mcp.context import clear_context_cache
 from frontmatter_mcp.settings import get_settings
 
 
+# Helper to call FastMCP tool functions (they're FunctionTool objects, not callables)
+def _call(tool_or_fn, *args, **kwargs):
+    """Call a tool function, handling both FastMCP FunctionTool and plain functions."""
+    fn = getattr(tool_or_fn, "fn", tool_or_fn)
+    return fn(*args, **kwargs)
+
+
 @pytest.fixture
 def temp_base_dir(monkeypatch: pytest.MonkeyPatch):
     """Create a temporary directory with test markdown files."""
@@ -60,14 +67,14 @@ class TestQueryInspect:
 
     def test_basic_schema(self, temp_base_dir: Path) -> None:
         """Get schema from files."""
-        result = server_module.query_inspect("*.md")
+        result = _call(server_module.query_inspect, "*.md")
         assert result["file_count"] == 2
         assert "date" in result["schema"]
         assert "tags" in result["schema"]
 
     def test_recursive_glob(self, temp_base_dir: Path) -> None:
         """Get schema with recursive glob."""
-        result = server_module.query_inspect("**/*.md")
+        result = _call(server_module.query_inspect, "**/*.md")
         assert result["file_count"] == 3
         assert "summary" in result["schema"]
 
@@ -77,20 +84,25 @@ class TestQuery:
 
     def test_select_all(self, temp_base_dir: Path) -> None:
         """Select all files."""
-        result = server_module.query("**/*.md", "SELECT path FROM files ORDER BY path")
+        result = _call(
+            server_module.query, "**/*.md", "SELECT path FROM files ORDER BY path"
+        )
         assert result["row_count"] == 3
         assert "path" in result["columns"]
 
     def test_where_clause(self, temp_base_dir: Path) -> None:
         """Filter by date."""
-        result = server_module.query(
-            "**/*.md", "SELECT path FROM files WHERE date >= '2025-11-26'"
+        result = _call(
+            server_module.query,
+            "**/*.md",
+            "SELECT path FROM files WHERE date >= '2025-11-26'",
         )
         assert result["row_count"] == 2
 
     def test_tag_contains(self, temp_base_dir: Path) -> None:
         """Filter by tag using from_json."""
-        result = server_module.query(
+        result = _call(
+            server_module.query,
             "**/*.md",
             """SELECT path FROM files
                WHERE list_contains(from_json(tags, '["VARCHAR"]'), 'python')""",
@@ -99,7 +111,8 @@ class TestQuery:
 
     def test_tag_aggregation(self, temp_base_dir: Path) -> None:
         """Aggregate tags using from_json."""
-        result = server_module.query(
+        result = _call(
+            server_module.query,
             "**/*.md",
             """
             SELECT tag, COUNT(*) AS count
@@ -118,20 +131,23 @@ class TestUpdate:
 
     def test_set_property(self, temp_base_dir: Path) -> None:
         """Set a property on a file."""
-        result = server_module.update("a.md", set={"status": "published"})
+        result = _call(server_module.update, "a.md", set={"status": "published"})
         assert result["path"] == "a.md"
         assert result["frontmatter"]["status"] == "published"
         assert result["frontmatter"]["date"] == datetime.date(2025, 11, 27)
 
     def test_unset_property(self, temp_base_dir: Path) -> None:
         """Unset a property from a file."""
-        result = server_module.update("b.md", unset=["tags"])
+        result = _call(server_module.update, "b.md", unset=["tags"])
         assert "tags" not in result["frontmatter"]
 
     def test_set_and_unset(self, temp_base_dir: Path) -> None:
         """Set and unset properties."""
-        result = server_module.update(
-            "subdir/c.md", set={"status": "done"}, unset=["summary"]
+        result = _call(
+            server_module.update,
+            "subdir/c.md",
+            set={"status": "done"},
+            unset=["summary"],
         )
         assert result["path"] == "subdir/c.md"
         assert result["frontmatter"]["status"] == "done"
@@ -140,12 +156,12 @@ class TestUpdate:
     def test_file_not_found(self, temp_base_dir: Path) -> None:
         """Error when file does not exist."""
         with pytest.raises(FileNotFoundError):
-            server_module.update("nonexistent.md", set={"x": 1})
+            _call(server_module.update, "nonexistent.md", set={"x": 1})
 
     def test_path_outside_base_dir(self, temp_base_dir: Path) -> None:
         """Error when path is outside base_dir."""
         with pytest.raises(ValueError):
-            server_module.update("../outside.md", set={"x": 1})
+            _call(server_module.update, "../outside.md", set={"x": 1})
 
 
 class TestBatchUpdate:
@@ -153,7 +169,7 @@ class TestBatchUpdate:
 
     def test_set_property_all_files(self, temp_base_dir: Path) -> None:
         """Set a property on all matching files."""
-        result = server_module.batch_update("*.md", set={"status": "reviewed"})
+        result = _call(server_module.batch_update, "*.md", set={"status": "reviewed"})
         assert result["updated_count"] == 2
 
         post = frontmatter.load(temp_base_dir / "a.md")
@@ -161,13 +177,13 @@ class TestBatchUpdate:
 
     def test_recursive_glob(self, temp_base_dir: Path) -> None:
         """Update all files including subdirectories."""
-        result = server_module.batch_update("**/*.md", set={"batch": True})
+        result = _call(server_module.batch_update, "**/*.md", set={"batch": True})
         assert result["updated_count"] == 3
         assert "subdir/c.md" in result["updated_files"]
 
     def test_unset_property(self, temp_base_dir: Path) -> None:
         """Unset a property from all matching files."""
-        result = server_module.batch_update("**/*.md", unset=["tags"])
+        result = _call(server_module.batch_update, "**/*.md", unset=["tags"])
         assert result["updated_count"] == 3
 
         post = frontmatter.load(temp_base_dir / "a.md")
@@ -175,8 +191,11 @@ class TestBatchUpdate:
 
     def test_set_and_unset(self, temp_base_dir: Path) -> None:
         """Set and unset properties in batch."""
-        result = server_module.batch_update(
-            "**/*.md", set={"new_prop": "value"}, unset=["date"]
+        result = _call(
+            server_module.batch_update,
+            "**/*.md",
+            set={"new_prop": "value"},
+            unset=["date"],
         )
         assert result["updated_count"] == 3
 
@@ -186,13 +205,13 @@ class TestBatchUpdate:
 
     def test_no_matching_files(self, temp_base_dir: Path) -> None:
         """Handle no matching files gracefully."""
-        result = server_module.batch_update("*.txt", set={"x": 1})
+        result = _call(server_module.batch_update, "*.txt", set={"x": 1})
         assert result["updated_count"] == 0
         assert result["updated_files"] == []
 
     def test_no_warnings_key_when_success(self, temp_base_dir: Path) -> None:
         """Warnings key is absent when all updates succeed."""
-        result = server_module.batch_update("*.md", set={"status": "ok"})
+        result = _call(server_module.batch_update, "*.md", set={"status": "ok"})
         assert result["updated_count"] == 2
         assert "warnings" not in result
 
@@ -203,7 +222,7 @@ class TestBatchUpdate:
             "---\ninvalid: [unclosed\n---\n# Content"
         )
 
-        result = server_module.batch_update("*.md", set={"status": "ok"})
+        result = _call(server_module.batch_update, "*.md", set={"status": "ok"})
         # a.md and b.md should succeed, malformed.md should fail
         assert result["updated_count"] == 2
         assert "warnings" in result
@@ -216,7 +235,7 @@ class TestBatchArrayAdd:
 
     def test_add_value_to_existing_array(self, temp_base_dir: Path) -> None:
         """Add a value to an existing array property."""
-        result = server_module.batch_array_add("*.md", "tags", "new-tag")
+        result = _call(server_module.batch_array_add, "*.md", "tags", "new-tag")
         assert result["updated_count"] == 2
         assert "a.md" in result["updated_files"]
 
@@ -225,7 +244,7 @@ class TestBatchArrayAdd:
 
     def test_skip_duplicate_value(self, temp_base_dir: Path) -> None:
         """Skip files where value already exists (allow_duplicates=False)."""
-        result = server_module.batch_array_add("*.md", "tags", "python")
+        result = _call(server_module.batch_array_add, "*.md", "tags", "python")
         # a.md has [python, mcp], b.md has [duckdb]
         # a.md is skipped (python already exists), b.md is updated
         assert result["updated_count"] == 1
@@ -233,8 +252,12 @@ class TestBatchArrayAdd:
 
     def test_allow_duplicates(self, temp_base_dir: Path) -> None:
         """Allow duplicate values when allow_duplicates=True."""
-        result = server_module.batch_array_add(
-            "*.md", "tags", "python", allow_duplicates=True
+        result = _call(
+            server_module.batch_array_add,
+            "*.md",
+            "tags",
+            "python",
+            allow_duplicates=True,
         )
         assert result["updated_count"] == 2
 
@@ -243,7 +266,7 @@ class TestBatchArrayAdd:
 
     def test_create_property_if_not_exists(self, temp_base_dir: Path) -> None:
         """Create array property if it doesn't exist."""
-        result = server_module.batch_array_add("*.md", "categories", "blog")
+        result = _call(server_module.batch_array_add, "*.md", "categories", "blog")
         assert result["updated_count"] == 2
 
         post = frontmatter.load(temp_base_dir / "a.md")
@@ -251,13 +274,15 @@ class TestBatchArrayAdd:
 
     def test_skip_non_array_property(self, temp_base_dir: Path) -> None:
         """Skip and warn when property is not an array."""
-        result = server_module.batch_array_add("*.md", "date", "value")
+        result = _call(server_module.batch_array_add, "*.md", "date", "value")
         assert result["updated_count"] == 0
         assert "warnings" in result
 
     def test_value_as_array_not_flattened(self, temp_base_dir: Path) -> None:
         """Array value should be added as single element, not flattened."""
-        result = server_module.batch_array_add("*.md", "tags", ["nested", "array"])
+        result = _call(
+            server_module.batch_array_add, "*.md", "tags", ["nested", "array"]
+        )
         assert result["updated_count"] == 2
 
         post = frontmatter.load(temp_base_dir / "a.md")
@@ -269,7 +294,7 @@ class TestBatchArrayRemove:
 
     def test_remove_value_from_array(self, temp_base_dir: Path) -> None:
         """Remove a value from array property."""
-        result = server_module.batch_array_remove("**/*.md", "tags", "python")
+        result = _call(server_module.batch_array_remove, "**/*.md", "tags", "python")
         # a.md and c.md have python tag
         assert result["updated_count"] == 2
 
@@ -278,19 +303,19 @@ class TestBatchArrayRemove:
 
     def test_skip_if_value_not_exists(self, temp_base_dir: Path) -> None:
         """Skip files where value doesn't exist."""
-        result = server_module.batch_array_remove("*.md", "tags", "nonexistent")
+        result = _call(server_module.batch_array_remove, "*.md", "tags", "nonexistent")
         assert result["updated_count"] == 0
         assert "warnings" not in result
 
     def test_skip_if_property_not_exists(self, temp_base_dir: Path) -> None:
         """Skip files where property doesn't exist."""
-        result = server_module.batch_array_remove("*.md", "categories", "value")
+        result = _call(server_module.batch_array_remove, "*.md", "categories", "value")
         assert result["updated_count"] == 0
         assert "warnings" not in result
 
     def test_skip_non_array_property(self, temp_base_dir: Path) -> None:
         """Skip and warn when property is not an array."""
-        result = server_module.batch_array_remove("*.md", "date", "value")
+        result = _call(server_module.batch_array_remove, "*.md", "date", "value")
         assert result["updated_count"] == 0
         assert "warnings" in result
 
@@ -300,7 +325,9 @@ class TestBatchArrayReplace:
 
     def test_replace_value_in_array(self, temp_base_dir: Path) -> None:
         """Replace a value in array property."""
-        result = server_module.batch_array_replace("**/*.md", "tags", "python", "py")
+        result = _call(
+            server_module.batch_array_replace, "**/*.md", "tags", "python", "py"
+        )
         assert result["updated_count"] == 2
 
         post = frontmatter.load(temp_base_dir / "a.md")
@@ -309,19 +336,23 @@ class TestBatchArrayReplace:
 
     def test_skip_if_old_value_not_exists(self, temp_base_dir: Path) -> None:
         """Skip files where old_value doesn't exist."""
-        result = server_module.batch_array_replace("*.md", "tags", "nonexistent", "new")
+        result = _call(
+            server_module.batch_array_replace, "*.md", "tags", "nonexistent", "new"
+        )
         assert result["updated_count"] == 0
         assert "warnings" not in result
 
     def test_skip_if_property_not_exists(self, temp_base_dir: Path) -> None:
         """Skip files where property doesn't exist."""
-        result = server_module.batch_array_replace("*.md", "categories", "old", "new")
+        result = _call(
+            server_module.batch_array_replace, "*.md", "categories", "old", "new"
+        )
         assert result["updated_count"] == 0
         assert "warnings" not in result
 
     def test_skip_non_array_property(self, temp_base_dir: Path) -> None:
         """Skip and warn when property is not an array."""
-        result = server_module.batch_array_replace("*.md", "date", "old", "new")
+        result = _call(server_module.batch_array_replace, "*.md", "date", "old", "new")
         assert result["updated_count"] == 0
         assert "warnings" in result
 
@@ -331,7 +362,7 @@ class TestBatchArraySort:
 
     def test_sort_array_ascending(self, temp_base_dir: Path) -> None:
         """Sort array in ascending order."""
-        result = server_module.batch_array_sort("*.md", "tags")
+        result = _call(server_module.batch_array_sort, "*.md", "tags")
         # a.md has [python, mcp] -> [mcp, python] (updated)
         # b.md has [duckdb] (single element, already sorted, skipped)
         assert result["updated_count"] == 1
@@ -342,7 +373,7 @@ class TestBatchArraySort:
 
     def test_sort_array_descending(self, temp_base_dir: Path) -> None:
         """Sort array in descending order."""
-        result = server_module.batch_array_sort("*.md", "tags", reverse=True)
+        result = _call(server_module.batch_array_sort, "*.md", "tags", reverse=True)
         # a.md has [python, mcp] - already descending order (skipped)
         # b.md has [duckdb] (single element, already sorted, skipped)
         assert result["updated_count"] == 0
@@ -350,9 +381,9 @@ class TestBatchArraySort:
     def test_sort_array_descending_updated(self, temp_base_dir: Path) -> None:
         """Sort array in descending order when not already sorted."""
         # First sort ascending
-        server_module.batch_array_sort("*.md", "tags")
+        _call(server_module.batch_array_sort, "*.md", "tags")
         # Now a.md has [mcp, python], reverse should update it
-        result = server_module.batch_array_sort("*.md", "tags", reverse=True)
+        result = _call(server_module.batch_array_sort, "*.md", "tags", reverse=True)
         assert result["updated_count"] == 1
 
         post = frontmatter.load(temp_base_dir / "a.md")
@@ -361,27 +392,27 @@ class TestBatchArraySort:
     def test_skip_if_already_sorted(self, temp_base_dir: Path) -> None:
         """Skip files where array is already sorted."""
         # First sort
-        server_module.batch_array_sort("*.md", "tags")
+        _call(server_module.batch_array_sort, "*.md", "tags")
         # Second sort should skip
-        result = server_module.batch_array_sort("*.md", "tags")
+        result = _call(server_module.batch_array_sort, "*.md", "tags")
         assert result["updated_count"] == 0
 
     def test_skip_empty_array(self, temp_base_dir: Path) -> None:
         """Skip files with empty array."""
         (temp_base_dir / "empty.md").write_text("---\ntags: []\n---\n# Empty")
 
-        result = server_module.batch_array_sort("empty.md", "tags")
+        result = _call(server_module.batch_array_sort, "empty.md", "tags")
         assert result["updated_count"] == 0
 
     def test_skip_if_property_not_exists(self, temp_base_dir: Path) -> None:
         """Skip files where property doesn't exist."""
-        result = server_module.batch_array_sort("*.md", "categories")
+        result = _call(server_module.batch_array_sort, "*.md", "categories")
         assert result["updated_count"] == 0
         assert "warnings" not in result
 
     def test_skip_non_array_property(self, temp_base_dir: Path) -> None:
         """Skip and warn when property is not an array."""
-        result = server_module.batch_array_sort("*.md", "date")
+        result = _call(server_module.batch_array_sort, "*.md", "date")
         assert result["updated_count"] == 0
         assert "warnings" in result
 
@@ -414,31 +445,19 @@ class TestSemanticSearchTools:
         )
         return mock_model
 
-    def test_index_status_disabled(self, temp_base_dir: Path) -> None:
-        """index_status returns disabled when semantic search is off."""
-        result = server_module.index_status()
-        assert result["enabled"] is False
-        assert "indexing" not in result
-
     def test_index_status_enabled(
         self, semantic_base_dir: Path, mock_embedding_model: MagicMock
     ) -> None:
-        """index_status returns status when semantic search is enabled."""
-        result = server_module.index_status()
-        assert result["enabled"] is True
+        """index_status returns indexing state when semantic search is enabled."""
+        result = _call(server_module.index_status)
         assert "indexing" in result
-        assert result["model"] == "test-model"
-
-    def test_index_refresh_disabled(self, temp_base_dir: Path) -> None:
-        """index_refresh returns error when semantic search is disabled."""
-        result = server_module.index_refresh()
-        assert result["error"] == "Semantic search is disabled"
+        assert isinstance(result["indexing"], bool)
 
     def test_index_refresh_enabled(
         self, semantic_base_dir: Path, mock_embedding_model: MagicMock
     ) -> None:
         """index_refresh starts indexing when enabled."""
-        result = server_module.index_refresh()
+        result = _call(server_module.index_refresh)
         assert "message" in result
         assert result["message"] in ["Indexing started", "Indexing already in progress"]
 
@@ -450,12 +469,13 @@ class TestSemanticSearchTools:
         self, semantic_base_dir: Path, mock_embedding_model: MagicMock
     ) -> None:
         """query can use embed() function after indexing."""
-        server_module.index_refresh()
+        _call(server_module.index_refresh)
         from frontmatter_mcp.context import get_indexer
 
         get_indexer().wait(timeout=5.0)
 
-        result = server_module.query(
+        result = _call(
+            server_module.query,
             "**/*.md",
             """SELECT path,
                1 - array_cosine_distance(embedding, embed('test')) as score

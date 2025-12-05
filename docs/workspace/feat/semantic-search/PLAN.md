@@ -102,6 +102,8 @@ frontmatter-mcp
 
 ## 新規ツール
 
+セマンティック検索が有効（`FRONTMATTER_ENABLE_SEMANTIC=true`）の場合のみ登録される。
+
 ### index_status
 
 ```python
@@ -110,10 +112,7 @@ def index_status() -> dict:
 
     Returns:
         {
-            "indexing": false,
-            "indexed_count": 660,
-            "model": "cl-nagoya/ruri-v3-30m",
-            "cache_path": "{base_dir}/.frontmatter-mcp/embeddings.duckdb"
+            "indexing": false
         }
     """
 ```
