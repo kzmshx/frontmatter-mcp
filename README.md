@@ -20,14 +20,19 @@ An MCP server for querying Markdown frontmatter with DuckDB SQL.
 
 ### With Semantic Search
 
-To enable semantic search, add `sentence-transformers` and set the environment variable:
+To enable semantic search, add the required dependencies and set the environment variable:
 
 ```json
 {
   "mcpServers": {
     "frontmatter": {
       "command": "uvx",
-      "args": ["--with", "sentence-transformers", "frontmatter-mcp"],
+      "args": [
+        "--with", "sentence-transformers",
+        "--with", "protobuf",
+        "--with", "sentencepiece",
+        "frontmatter-mcp"
+      ],
       "env": {
         "FRONTMATTER_BASE_DIR": "/path/to/markdown/directory",
         "FRONTMATTER_ENABLE_SEMANTIC": "true"
