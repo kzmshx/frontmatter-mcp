@@ -154,7 +154,7 @@ query_inspect("**/*.md")
 #     "schema": {
 #         "path": {...},
 #         "date": {...},
-#         "embedding": {"type": "FLOAT[384]", ...},  # インデキシング完了時のみ
+#         "embedding": {"type": "FLOAT[256]", ...},  # インデキシング完了時のみ
 #         ...
 #     }
 # }
@@ -266,13 +266,13 @@ VSS 拡張は DuckDB 本体に含まれており、`INSTALL vss; LOAD vss;` で�
 
 各ステップでテストと実装を同時に進める。`pytest.mark.slow` で実モデルテストを分離。
 
-### Step 1: Embedding モジュール
+### Step 1: Embedding モジュール (完了)
 
 対象: `embedding.py`, `test_embedding.py`
 
-- [ ] モデルロード（遅延ロード）
-- [ ] テキスト → ベクトル変換
-- [ ] 次元数の自動取得
+- [x] モデルロード（遅延ロード）
+- [x] テキスト → ベクトル変換
+- [x] 次元数の自動取得
 
 テスト観点:
 
@@ -280,15 +280,15 @@ VSS 拡張は DuckDB 本体に含まれており、`INSTALL vss; LOAD vss;` で�
 - encode() の出力形状
 - 次元数取得
 
-### Step 2: キャッシュモジュール
+### Step 2: キャッシュモジュール (完了)
 
 対象: `cache.py`, `test_cache.py`
 
-- [ ] DuckDB 永続化（embeddings.duckdb）
-- [ ] embeddings / metadata テーブル作成
-- [ ] embedding の保存・取得
-- [ ] mtime 比較による差分検出
-- [ ] モデル変更時のキャッシュ破棄
+- [x] DuckDB 永続化（embeddings.duckdb）
+- [x] embeddings / metadata テーブル作成
+- [x] embedding の保存・取得
+- [x] mtime 比較による差分検出
+- [x] モデル変更時のキャッシュ破棄
 
 テスト観点:
 

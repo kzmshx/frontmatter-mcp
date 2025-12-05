@@ -13,6 +13,13 @@ dependencies = [
   "pyarrow>=22.0.0",
 ]
 
+[project.optional-dependencies]
+semantic = [
+  "sentence-transformers>=2.0.0",
+  "protobuf>=3.0.0",
+  "sentencepiece>=0.1.0",
+]
+
 [project.scripts]
 frontmatter-mcp = "frontmatter_mcp.server:main"
 
@@ -36,3 +43,8 @@ select = ["E", "F", "I", "B"]
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+
+[tool.pytest.ini_options]
+markers = [
+  "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
