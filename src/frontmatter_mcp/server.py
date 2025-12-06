@@ -121,8 +121,18 @@ def query(glob: str, sql: str) -> Response:
     Args:
         glob: Glob pattern relative to base directory (e.g. "atoms/**/*.md").
         sql: SQL query string. Reference 'files' table. Columns are frontmatter
-            properties plus 'path'. If semantic search is enabled and indexing
-            is complete, you can use embed() function and embedding column.
+            properties plus 'path'.
+
+    Semantic search (when enabled and indexing is complete):
+        - embedding: document embedding vector (NULL if not indexed)
+        - embed('text'): converts text to embedding vector
+        - array_cosine_similarity(a, b): similarity score (0-1)
+
+        Example - find similar documents:
+            SELECT path,
+                   array_cosine_similarity(embedding, embed('search term')) as score
+            FROM files WHERE embedding IS NOT NULL
+            ORDER BY score DESC LIMIT 10
 
     Returns:
         Dict with results array, row_count, and columns.
