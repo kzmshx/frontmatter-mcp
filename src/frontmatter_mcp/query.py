@@ -1,7 +1,7 @@
 """DuckDB query execution module."""
 
 import json
-from typing import Any, Callable
+from typing import Any
 
 import duckdb
 import pyarrow as pa
@@ -20,32 +20,22 @@ def _serialize_value(value: Any) -> str | None:
     return str(value)
 
 
-def execute_query(
-    records: list[dict[str, Any]],
-    sql: str,
-    conn_setup: Callable[[duckdb.DuckDBPyConnection], None] | None = None,
-) -> dict[str, Any]:
-    """Execute DuckDB SQL query on frontmatter records.
+def create_base_connection(records: list[dict[str, Any]]) -> duckdb.DuckDBPyConnection:
+    """Create a new in-memory DuckDB connection with files table.
 
-    All values are passed as strings to DuckDB. Use TRY_CAST in SQL
-    for type conversion. Arrays are JSON-encoded strings.
+    Creates a files table with path and frontmatter columns.
 
     Args:
         records: List of parsed frontmatter records.
-        sql: SQL query string. Must reference 'files' table.
-        conn_setup: Optional callback to set up the connection before query.
-            When provided, 'files_base' table is registered instead of 'files',
-            allowing the callback to create a 'files' view with additional columns.
 
     Returns:
-        Dictionary with results, row_count, and columns.
+        DuckDB connection with files table.
     """
+    conn = duckdb.connect(":memory:")
+
     if not records:
-        return {
-            "results": [],
-            "row_count": 0,
-            "columns": [],
-        }
+        conn.execute("CREATE TABLE files (path TEXT)")
+        return conn
 
     # Collect all unique keys across all records
     all_keys: set[str] = set()
@@ -62,17 +52,23 @@ def execute_query(
     schema = pa.schema([(key, pa.string()) for key in all_keys])
     table = pa.table(columns_data, schema=schema)
 
-    # Create connection and register table
-    conn = duckdb.connect(":memory:")
+    # Register and create actual table (not view)
+    conn.register("_temp_source", table)
+    conn.execute("CREATE TABLE files AS SELECT * FROM _temp_source")
 
-    if conn_setup:
-        # Register as files_base, then let callback create files view
-        conn.register("files_base", table)
-        conn_setup(conn)
-    else:
-        conn.register("files", table)
+    return conn
 
-    # Execute query
+
+def execute_query(conn: duckdb.DuckDBPyConnection, sql: str) -> dict[str, Any]:
+    """Execute SQL query on prepared connection.
+
+    Args:
+        conn: DuckDB connection with tables already set up.
+        sql: SQL query string.
+
+    Returns:
+        Dictionary with results, row_count, and columns.
+    """
     result = conn.execute(sql)
     columns = [desc[0] for desc in result.description]
     rows = result.fetchall()

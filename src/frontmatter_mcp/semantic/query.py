@@ -10,14 +10,16 @@ if TYPE_CHECKING:
     from frontmatter_mcp.semantic.context import SemanticContext
 
 
-def setup_semantic_search(
+def add_semantic_columns(
     conn: duckdb.DuckDBPyConnection,
     ctx: SemanticContext,
 ) -> None:
-    """Set up semantic search capabilities in DuckDB connection.
+    """Add semantic search columns and functions to DuckDB connection.
+
+    Adds embedding column to files table and registers embed() function.
 
     Args:
-        conn: DuckDB connection.
+        conn: DuckDB connection with 'files' table already created.
         ctx: Semantic context with model and cache.
     """
     # Install and load VSS extension
@@ -38,9 +40,12 @@ def setup_semantic_search(
         f"FLOAT[{dim}]",  # type: ignore[arg-type]
     )
 
-    # Create embeddings table
+    # Add embedding column to files table
+    conn.execute(f"ALTER TABLE files ADD COLUMN embedding FLOAT[{dim}]")
+
+    # Create temporary embeddings table for UPDATE
     conn.execute(f"""
-        CREATE TABLE embeddings (
+        CREATE TEMP TABLE embeddings (
             path TEXT PRIMARY KEY,
             vector FLOAT[{dim}]
         )
@@ -53,10 +58,10 @@ def setup_semantic_search(
             [path, vector.tolist()],
         )
 
-    # Create files view with embedding column via JOIN
+    # Update files table with embeddings
     conn.execute("""
-        CREATE VIEW files AS
-        SELECT f.*, e.vector as embedding
-        FROM files_base f
-        LEFT JOIN embeddings e ON f.path = e.path
+        UPDATE files
+        SET embedding = e.vector
+        FROM embeddings e
+        WHERE files.path = e.path
     """)

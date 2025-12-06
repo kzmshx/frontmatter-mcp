@@ -16,32 +16,37 @@ class ColumnInfo(TypedDict):
 Schema = dict[str, ColumnInfo]
 
 
-def add_frontmatter_columns(
-    schema: Schema,
-    records: list[dict[str, Any]],
-    max_samples: int = 5,
-) -> None:
-    """Add frontmatter columns to schema.
+def create_base_schema(records: list[dict[str, Any]], max_samples: int = 5) -> Schema:
+    """Create base schema with path and frontmatter columns.
 
     Extracts column information from parsed frontmatter records.
     All values are treated as strings or arrays in DuckDB queries.
 
     Args:
-        schema: Schema dict to extend (mutated in place).
         records: List of parsed frontmatter records.
         max_samples: Maximum number of sample values to include.
+
+    Returns:
+        Schema dict with path and frontmatter columns.
     """
+    schema: Schema = {}
     property_values: dict[str, list[Any]] = defaultdict(list)
+
     for record in records:
         for key, value in record.items():
-            if key != "path":
-                property_values[key].append(value)
+            property_values[key].append(value)
 
     total_files = len(records)
 
     for prop, values in property_values.items():
         non_null_values = [v for v in values if v is not None]
         count = len(non_null_values)
+
+        # path is never nullable
+        if prop == "path":
+            nullable = False
+        else:
+            nullable = count < total_files
 
         # Detect if values are arrays
         is_array = any(isinstance(v, list) for v in non_null_values)
@@ -57,6 +62,8 @@ def add_frontmatter_columns(
 
         schema[prop] = ColumnInfo(
             type="array" if is_array else "string",
-            nullable=count < total_files,
+            nullable=nullable,
             examples=samples,
         )
+
+    return schema

@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from frontmatter_mcp.semantic.context import SemanticContext
 
 
-def add_semantic_columns(schema: Schema, ctx: SemanticContext) -> None:
+def add_semantic_schema(schema: Schema, ctx: SemanticContext) -> None:
     """Add semantic search columns to schema.
 
     Args:

@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 
 import numpy as np
 
-from frontmatter_mcp.query import execute_query
-from frontmatter_mcp.semantic import setup_semantic_search
+from frontmatter_mcp.query import create_base_connection, execute_query
+from frontmatter_mcp.semantic import add_semantic_columns
 from frontmatter_mcp.semantic.context import SemanticContext
 
 
@@ -22,6 +22,12 @@ def create_mock_semantic_context(
     return SemanticContext(model=model, cache=mock_cache, indexer=mock_indexer)
 
 
+def _execute_query_simple(records: list[dict[str, Any]], sql: str) -> dict[str, Any]:
+    """Helper to execute query with new API (no semantic)."""
+    conn = create_base_connection(records)
+    return execute_query(conn, sql)
+
+
 class TestExecuteQuery:
     """Tests for execute_query function."""
 
@@ -31,7 +37,7 @@ class TestExecuteQuery:
             {"path": "a.md", "title": "Title A"},
             {"path": "b.md", "title": "Title B"},
         ]
-        result = execute_query(records, "SELECT * FROM files")
+        result = _execute_query_simple(records, "SELECT * FROM files")
 
         assert result["row_count"] == 2
         assert "path" in result["columns"]
@@ -43,7 +49,7 @@ class TestExecuteQuery:
             {"path": "a.md", "title": "Title A", "date": date(2025, 11, 27)},
             {"path": "b.md", "title": "Title B", "date": date(2025, 11, 26)},
         ]
-        result = execute_query(records, "SELECT path, title FROM files")
+        result = _execute_query_simple(records, "SELECT path, title FROM files")
 
         assert result["columns"] == ["path", "title"]
         assert len(result["results"]) == 2
@@ -55,7 +61,7 @@ class TestExecuteQuery:
             {"path": "b.md", "date": date(2025, 11, 26)},
             {"path": "c.md", "date": date(2025, 11, 25)},
         ]
-        result = execute_query(
+        result = _execute_query_simple(
             records, "SELECT path FROM files WHERE date >= '2025-11-26'"
         )
 
@@ -71,7 +77,9 @@ class TestExecuteQuery:
             {"path": "b.md", "date": date(2025, 11, 26)},
             {"path": "a.md", "date": date(2025, 11, 27)},
         ]
-        result = execute_query(records, "SELECT path FROM files ORDER BY date DESC")
+        result = _execute_query_simple(
+            records, "SELECT path FROM files ORDER BY date DESC"
+        )
 
         assert result["results"][0]["path"] == "a.md"
         assert result["results"][1]["path"] == "b.md"
@@ -84,7 +92,7 @@ class TestExecuteQuery:
             {"path": "c.md", "tags": ["mcp", "duckdb"]},
         ]
         # Arrays are JSON-encoded strings, use from_json to parse
-        result = execute_query(
+        result = _execute_query_simple(
             records,
             """SELECT path FROM files
                WHERE list_contains(from_json(tags, '["VARCHAR"]'), 'mcp')""",
@@ -102,7 +110,7 @@ class TestExecuteQuery:
             {"path": "b.md"},
             {"path": "c.md"},
         ]
-        result = execute_query(records, "SELECT COUNT(*) as count FROM files")
+        result = _execute_query_simple(records, "SELECT COUNT(*) as count FROM files")
 
         assert result["row_count"] == 1
         assert result["results"][0]["count"] == 3
@@ -114,7 +122,7 @@ class TestExecuteQuery:
             {"path": "b.md", "tags": ["mcp"]},
         ]
         # Arrays are JSON-encoded strings, use from_json then unnest
-        result = execute_query(
+        result = _execute_query_simple(
             records,
             """
             SELECT tag, COUNT(*) AS count
@@ -130,7 +138,7 @@ class TestExecuteQuery:
 
     def test_empty_records(self) -> None:
         """Handle empty records list."""
-        result = execute_query([], "SELECT * FROM files")
+        result = _execute_query_simple([], "SELECT * FROM files")
 
         assert result["row_count"] == 0
         assert result["results"] == []
@@ -142,7 +150,9 @@ class TestExecuteQuery:
             {"path": "b.md", "summary": None},
             {"path": "c.md"},  # No summary key at all
         ]
-        result = execute_query(records, "SELECT path FROM files WHERE summary IS NULL")
+        result = _execute_query_simple(
+            records, "SELECT path FROM files WHERE summary IS NULL"
+        )
 
         paths = [r["path"] for r in result["results"]]
         assert "b.md" in paths
@@ -167,13 +177,13 @@ class TestExecuteQuery:
         ]
         # Query should not error - all values are strings now
         # Note: String comparison means '<% ...' sorts after '2025-...'
-        result = execute_query(records, "SELECT path, date FROM files")
+        result = _execute_query_simple(records, "SELECT path, date FROM files")
 
         # All 3 records are returned without type errors
         assert result["row_count"] == 3
 
         # To filter out templates, use LIKE or explicit date patterns
-        result_filtered = execute_query(
+        result_filtered = _execute_query_simple(
             records,
             "SELECT path FROM files WHERE date LIKE '2025-%' AND date >= '2025-11-26'",
         )
@@ -196,7 +206,7 @@ class TestExecuteQuery:
             {"path": "d.md", "value": True},
             {"path": "e.md", "value": ["a", "b"]},
         ]
-        result = execute_query(records, "SELECT path, value FROM files")
+        result = _execute_query_simple(records, "SELECT path, value FROM files")
 
         assert result["row_count"] == 5
         # All values are strings
@@ -214,7 +224,7 @@ class TestSemanticSearch:
     def test_query_without_embeddings(self) -> None:
         """Query works without embeddings (backward compatibility)."""
         records = [{"path": "a.md", "title": "A"}]
-        result = execute_query(records, "SELECT * FROM files")
+        result = _execute_query_simple(records, "SELECT * FROM files")
         assert result["row_count"] == 1
 
     def test_query_with_embedding_column(self) -> None:
@@ -227,11 +237,10 @@ class TestSemanticSearch:
         mock_model.encode.return_value = np.random.rand(256).astype(np.float32)
 
         semantic = create_mock_semantic_context(embeddings, mock_model)
-        result = execute_query(
-            records,
-            "SELECT path, embedding FROM files",
-            conn_setup=lambda conn: setup_semantic_search(conn, semantic),
-        )
+
+        conn = create_base_connection(records)
+        add_semantic_columns(conn, semantic)
+        result = execute_query(conn, "SELECT path, embedding FROM files")
 
         assert result["row_count"] == 1
         assert "embedding" in result["columns"]
@@ -246,12 +255,12 @@ class TestSemanticSearch:
         mock_model.get_dimension.return_value = 256
         mock_model.encode.return_value = np.random.rand(256).astype(np.float32)
 
-        # Use embed() function in SQL
         semantic = create_mock_semantic_context(embeddings, mock_model)
+
+        conn = create_base_connection(records)
+        add_semantic_columns(conn, semantic)
         result = execute_query(
-            records,
-            "SELECT path, embed('test query') as query_vec FROM files",
-            conn_setup=lambda conn: setup_semantic_search(conn, semantic),
+            conn, "SELECT path, embed('test query') as query_vec FROM files"
         )
 
         assert result["row_count"] == 1
@@ -276,14 +285,16 @@ class TestSemanticSearch:
         mock_model.encode.return_value = query_vec
 
         semantic = create_mock_semantic_context(embeddings, mock_model)
+
+        conn = create_base_connection(records)
+        add_semantic_columns(conn, semantic)
         result = execute_query(
-            records,
+            conn,
             """
             SELECT path, 1 - array_cosine_distance(embedding, embed('query')) as score
             FROM files
             ORDER BY score DESC
             """,
-            conn_setup=lambda conn: setup_semantic_search(conn, semantic),
         )
 
         assert result["row_count"] == 2
@@ -303,11 +314,10 @@ class TestSemanticSearch:
         mock_model.get_dimension.return_value = 256
 
         semantic = create_mock_semantic_context(embeddings, mock_model)
-        result = execute_query(
-            records,
-            "SELECT path, embedding FROM files ORDER BY path",
-            conn_setup=lambda conn: setup_semantic_search(conn, semantic),
-        )
+
+        conn = create_base_connection(records)
+        add_semantic_columns(conn, semantic)
+        result = execute_query(conn, "SELECT path, embedding FROM files ORDER BY path")
 
         assert result["row_count"] == 2
         assert result["results"][0]["path"] == "a.md"

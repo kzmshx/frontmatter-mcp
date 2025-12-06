@@ -4,7 +4,7 @@ from frontmatter_mcp.semantic.cache import EmbeddingCache
 from frontmatter_mcp.semantic.context import SemanticContext, get_semantic_context
 from frontmatter_mcp.semantic.indexer import EmbeddingIndexer, IndexerState
 from frontmatter_mcp.semantic.model import EmbeddingModel
-from frontmatter_mcp.semantic.query import setup_semantic_search
+from frontmatter_mcp.semantic.query import add_semantic_columns
 
 __all__ = [
     "EmbeddingCache",
@@ -13,5 +13,5 @@ __all__ = [
     "EmbeddingModel",
     "SemanticContext",
     "get_semantic_context",
-    "setup_semantic_search",
+    "add_semantic_columns",
 ]

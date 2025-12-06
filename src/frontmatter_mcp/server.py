@@ -1,25 +1,21 @@
 """MCP Server implementation using FastMCP."""
 
 import glob as globmodule
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    import duckdb
-
 from pathlib import Path
+from typing import Any
 
 import frontmatter
 from fastmcp import FastMCP
 
-from frontmatter_mcp.frontmatter import parse_files, update_file
-from frontmatter_mcp.query import execute_query
-from frontmatter_mcp.query_schema import Schema, add_frontmatter_columns
+from frontmatter_mcp.files import parse_files, update_file
+from frontmatter_mcp.query import create_base_connection, execute_query
+from frontmatter_mcp.query_schema import create_base_schema
 from frontmatter_mcp.semantic import (
     SemanticContext,
+    add_semantic_columns,
     get_semantic_context,
-    setup_semantic_search,
 )
-from frontmatter_mcp.semantic.query_schema import add_semantic_columns
+from frontmatter_mcp.semantic.query_schema import add_semantic_schema
 from frontmatter_mcp.settings import Settings, get_settings
 
 Response = dict[str, Any]
@@ -99,15 +95,15 @@ def query_inspect(glob: str) -> Response:
 
     paths = _collect_files(_settings.base_dir, glob)
     records, warnings = parse_files(paths, _settings.base_dir)
-    schema: Schema = {}
 
-    add_frontmatter_columns(schema, records)
+    # Create base schema with path and frontmatter columns
+    schema = create_base_schema(records)
 
-    # Add semantic columns if semantic search is ready
+    # Add semantic schema columns if semantic search is ready
     if _settings.enable_semantic:
         assert _semantic_ctx is not None
         if _semantic_ctx.is_ready:
-            add_semantic_columns(schema, _semantic_ctx)
+            add_semantic_schema(schema, _semantic_ctx)
 
     return _build_response(
         {
@@ -136,16 +132,16 @@ def query(glob: str, sql: str) -> Response:
     paths = _collect_files(_settings.base_dir, glob)
     records, warnings = parse_files(paths, _settings.base_dir)
 
-    # Prepare semantic search if enabled and indexing complete
-    conn_setup_func = None
+    # Create base connection with files table (path and frontmatter columns)
+    conn = create_base_connection(records)
+
+    # Add semantic search columns if enabled and ready
     if _settings.enable_semantic:
         assert _semantic_ctx is not None
         if _semantic_ctx.is_ready:
+            add_semantic_columns(conn, _semantic_ctx)
 
-            def conn_setup_func(conn: "duckdb.DuckDBPyConnection") -> None:
-                setup_semantic_search(conn, _semantic_ctx)
-
-    query_result = execute_query(records, sql, conn_setup=conn_setup_func)
+    query_result = execute_query(conn, sql)
 
     return _build_response(
         {
@@ -197,7 +193,9 @@ def index_refresh() -> Response:
 
 @mcp.tool()
 def update(
-    path: str, set: dict[str, Any] | None = None, unset: list[str] | None = None
+    path: str,
+    set: dict[str, Any] | None = None,
+    unset: list[str] | None = None,
 ) -> Response:
     """Update frontmatter properties in a single file.
 
@@ -224,7 +222,9 @@ def update(
 
 @mcp.tool()
 def batch_update(
-    glob: str, set: dict[str, Any] | None = None, unset: list[str] | None = None
+    glob: str,
+    set: dict[str, Any] | None = None,
+    unset: list[str] | None = None,
 ) -> Response:
     """Update frontmatter properties in multiple files matching glob pattern.
 
@@ -268,7 +268,10 @@ def batch_update(
 
 @mcp.tool()
 def batch_array_add(
-    glob: str, property: str, value: Any, allow_duplicates: bool = False
+    glob: str,
+    property: str,
+    value: Any,
+    allow_duplicates: bool = False,
 ) -> Response:
     """Add a value to an array property in multiple files.
 
@@ -334,7 +337,11 @@ def batch_array_add(
 
 
 @mcp.tool()
-def batch_array_remove(glob: str, property: str, value: Any) -> Response:
+def batch_array_remove(
+    glob: str,
+    property: str,
+    value: Any,
+) -> Response:
     """Remove a value from an array property in multiple files.
 
     Args:
@@ -397,7 +404,10 @@ def batch_array_remove(glob: str, property: str, value: Any) -> Response:
 
 @mcp.tool()
 def batch_array_replace(
-    glob: str, property: str, old_value: Any, new_value: Any
+    glob: str,
+    property: str,
+    old_value: Any,
+    new_value: Any,
 ) -> Response:
     """Replace a value in an array property in multiple files.
 
@@ -462,7 +472,11 @@ def batch_array_replace(
 
 
 @mcp.tool()
-def batch_array_sort(glob: str, property: str, reverse: bool = False) -> Response:
+def batch_array_sort(
+    glob: str,
+    property: str,
+    reverse: bool = False,
+) -> Response:
     """Sort an array property in multiple files.
 
     Args:
