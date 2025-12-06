@@ -1,6 +1,9 @@
 """Embedding model module for semantic search."""
 
+from typing import Any, cast
+
 import numpy as np
+from numpy.typing import NDArray
 from sentence_transformers import SentenceTransformer
 
 
@@ -44,9 +47,12 @@ class EmbeddingModel:
         Returns:
             The dimension of the embedding vectors.
         """
-        return self.model.get_sentence_embedding_dimension()
+        dim = self.model.get_sentence_embedding_dimension()
+        if dim is None:
+            raise RuntimeError("Model does not report embedding dimension")
+        return dim
 
-    def encode(self, text: str) -> np.ndarray:
+    def encode(self, text: str) -> NDArray[np.floating[Any]]:
         """Encode text to embedding vector.
 
         Args:
@@ -55,4 +61,4 @@ class EmbeddingModel:
         Returns:
             Embedding vector as numpy array.
         """
-        return self.model.encode(text)
+        return cast(NDArray[np.floating[Any]], self.model.encode(text))

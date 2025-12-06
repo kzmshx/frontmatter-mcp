@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 import frontmatter_mcp.server as server_module
-from frontmatter_mcp.context import clear_context_cache
+from frontmatter_mcp import context as context_module
 from frontmatter_mcp.settings import get_settings
 
 
@@ -19,6 +19,17 @@ def _call(tool_or_fn, *args, **kwargs):
     """Call a tool function, handling both FastMCP FunctionTool and plain functions."""
     fn = getattr(tool_or_fn, "fn", tool_or_fn)
     return fn(*args, **kwargs)
+
+
+def clear_context_cache() -> None:
+    """Clear all cached context instances (for testing)."""
+    # Check if cache_clear exists (may be replaced by monkeypatch in tests)
+    if hasattr(context_module.get_embedding_model, "cache_clear"):
+        context_module.get_embedding_model.cache_clear()
+    if hasattr(context_module.get_embedding_cache, "cache_clear"):
+        context_module.get_embedding_cache.cache_clear()
+    if hasattr(context_module.get_indexer, "cache_clear"):
+        context_module.get_indexer.cache_clear()
 
 
 @pytest.fixture

@@ -3,7 +3,7 @@
 import threading
 from enum import Enum
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 import frontmatter
 
@@ -56,7 +56,7 @@ class EmbeddingIndexer:
         """Get the number of indexed documents."""
         return self._cache.count()
 
-    def start(self) -> dict:
+    def start(self) -> dict[str, Any]:
         """Start background indexing.
 
         Returns:

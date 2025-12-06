@@ -168,12 +168,12 @@ Update frontmatter properties in multiple files.
 
 Add a value to an array property in multiple files.
 
-| Parameter          | Type   | Description                                |
-| ------------------ | ------ | ------------------------------------------ |
-| `glob`             | string | Glob pattern relative to base directory    |
-| `property`         | string | Name of the array property                 |
-| `value`            | any    | Value to add                               |
-| `allow_duplicates` | bool   | Allow duplicate values (default: false)    |
+| Parameter          | Type   | Description                             |
+| ------------------ | ------ | --------------------------------------- |
+| `glob`             | string | Glob pattern relative to base directory |
+| `property`         | string | Name of the array property              |
+| `value`            | any    | Value to add                            |
+| `allow_duplicates` | bool   | Allow duplicate values (default: false) |
 
 **Example:**
 
@@ -230,11 +230,11 @@ Replace a value in an array property in multiple files.
 
 Sort an array property in multiple files.
 
-| Parameter  | Type   | Description                             |
-| ---------- | ------ | --------------------------------------- |
-| `glob`     | string | Glob pattern relative to base directory |
-| `property` | string | Name of the array property              |
-| `reverse`  | bool   | Sort in descending order (default: false)|
+| Parameter  | Type   | Description                               |
+| ---------- | ------ | ----------------------------------------- |
+| `glob`     | string | Glob pattern relative to base directory   |
+| `property` | string | Name of the array property                |
+| `reverse`  | bool   | Sort in descending order (default: false) |
 
 **Example:**
 
@@ -327,12 +327,12 @@ LIMIT 10
 
 Environment variables:
 
-| Variable                    | Default                          | Description                   |
-| --------------------------- | -------------------------------- | ----------------------------- |
-| FRONTMATTER_BASE_DIR        | (required)                       | Base directory for files      |
-| FRONTMATTER_ENABLE_SEMANTIC | false                            | Enable semantic search        |
-| FRONTMATTER_EMBEDDING_MODEL | cl-nagoya/ruri-v3-30m            | Embedding model name          |
-| FRONTMATTER_CACHE_DIR       | BASE_DIR/.frontmatter-mcp        | Cache directory for embeddings|
+| Variable                    | Default                               | Description                    |
+| --------------------------- | ------------------------------------- | ------------------------------ |
+| FRONTMATTER_BASE_DIR        | (required)                            | Base directory for files       |
+| FRONTMATTER_ENABLE_SEMANTIC | false                                 | Enable semantic search         |
+| FRONTMATTER_EMBEDDING_MODEL | cl-nagoya/ruri-v3-30m                 | Embedding model name           |
+| FRONTMATTER_CACHE_DIR       | FRONTMATTER_BASE_DIR/.frontmatter-mcp | Cache directory for embeddings |
 
 ## License
 

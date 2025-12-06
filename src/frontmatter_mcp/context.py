@@ -31,11 +31,9 @@ def get_embedding_model() -> EmbeddingModel:
 def get_embedding_cache() -> EmbeddingCache:
     """Get the cached embedding cache instance."""
     settings = get_settings()
-    base_dir = get_base_dir()
-    cache_dir = settings.get_cache_dir(base_dir)
     model = get_embedding_model()
     return EmbeddingCache(
-        cache_dir=cache_dir,
+        cache_dir=settings.cache_dir,
         model_name=model.model_name,
         dimension=model.get_dimension(),
     )
@@ -61,14 +59,3 @@ def is_indexing_ready() -> bool:
         True if indexer state is READY (indexing completed at least once).
     """
     return get_indexer().state == IndexerState.READY
-
-
-def clear_context_cache() -> None:
-    """Clear all cached context instances (for testing)."""
-    # Check if cache_clear exists (may be replaced by monkeypatch in tests)
-    if hasattr(get_embedding_model, "cache_clear"):
-        get_embedding_model.cache_clear()
-    if hasattr(get_embedding_cache, "cache_clear"):
-        get_embedding_cache.cache_clear()
-    if hasattr(get_indexer, "cache_clear"):
-        get_indexer.cache_clear()

@@ -1,7 +1,7 @@
 """Semantic search query support module."""
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 import duckdb
 import numpy as np
@@ -18,7 +18,7 @@ class SemanticContext:
     provided as a pair.
     """
 
-    embeddings: dict[str, np.ndarray]
+    embeddings: dict[str, np.ndarray[Any, Any]]
     """Dict mapping file path to embedding vector."""
 
     model: "EmbeddingModel"
@@ -44,9 +44,14 @@ def setup_semantic_search(
 
     # Register embed() function
     def embed_func(text: str) -> list[float]:
-        return semantic.model.encode(text).tolist()
+        return cast(list[float], semantic.model.encode(text).tolist())
 
-    conn.create_function("embed", embed_func, [str], f"FLOAT[{dim}]")
+    conn.create_function(
+        "embed",
+        embed_func,
+        [str],  # type: ignore[list-item]
+        f"FLOAT[{dim}]",  # type: ignore[arg-type]
+    )
 
     # Create embeddings table
     conn.execute(f"""
@@ -73,8 +78,8 @@ def setup_semantic_search(
 
 
 def extend_schema_semantic(
-    schema: dict[str, dict],
-    records: list[dict],
+    schema: dict[str, dict[str, Any]],
+    records: list[dict[str, Any]],
     model: "EmbeddingModel",
 ) -> None:
     """Extend schema with semantic search fields.

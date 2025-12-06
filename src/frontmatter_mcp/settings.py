@@ -1,59 +1,48 @@
-"""Settings module for frontmatter-mcp."""
+"""Application settings loaded from environment variables."""
 
 from functools import lru_cache
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Default cache directory name
 DEFAULT_CACHE_DIR_NAME = ".frontmatter-mcp"
-
-# Default embedding model
 DEFAULT_EMBEDDING_MODEL = "cl-nagoya/ruri-v3-30m"
 
 
 class Settings(BaseSettings):
-    """Application settings loaded from environment variables.
+    """Application settings."""
 
-    Environment variables:
-        FRONTMATTER_BASE_DIR: Base directory path (required)
-        FRONTMATTER_ENABLE_SEMANTIC: Enable semantic search (default: false)
-        FRONTMATTER_EMBEDDING_MODEL: Embedding model name (default: auto)
-        FRONTMATTER_CACHE_DIR: Cache directory path (default: base_dir/.frontmatter-mcp)
-    """
+    model_config = SettingsConfigDict()
 
-    model_config = SettingsConfigDict(env_prefix="FRONTMATTER_")
+    frontmatter_base_dir: Path
+    frontmatter_enable_semantic: bool = False
+    frontmatter_embedding_model: str = DEFAULT_EMBEDDING_MODEL
+    frontmatter_cache_dir: Path | None = None
 
-    base_dir: Path
-    enable_semantic: bool = False
-    embedding_model: str = DEFAULT_EMBEDDING_MODEL
-    cache_dir: Path | None = None
+    @property
+    def base_dir(self) -> Path:
+        """Base directory for markdown files."""
+        return self.frontmatter_base_dir
 
-    def get_cache_dir(self, base_dir: Path) -> Path:
-        """Get the cache directory path.
+    @property
+    def enable_semantic(self) -> bool:
+        """Whether semantic search is enabled."""
+        return self.frontmatter_enable_semantic
 
-        Args:
-            base_dir: Base directory for default cache location.
+    @property
+    def embedding_model(self) -> str:
+        """Embedding model name for semantic search."""
+        return self.frontmatter_embedding_model
 
-        Returns:
-            Cache directory path from settings, or base_dir/.frontmatter-mcp if not set.
-        """
-        if self.cache_dir:
-            return self.cache_dir
-        return base_dir / DEFAULT_CACHE_DIR_NAME
+    @property
+    def cache_dir(self) -> Path:
+        """Cache directory for embeddings database."""
+        if self.frontmatter_cache_dir:
+            return self.frontmatter_cache_dir
+        return self.base_dir / DEFAULT_CACHE_DIR_NAME
 
 
 @lru_cache
 def get_settings() -> Settings:
-    """Get the cached settings instance.
-
-    Settings are read from environment variables on first call and cached.
-    Use get_settings.cache_clear() in tests to reset.
-
-    Returns:
-        Cached Settings instance.
-
-    Raises:
-        ValidationError: If required environment variables are not set.
-    """
-    return Settings()
+    """Get the cached settings instance."""
+    return Settings()  # type: ignore[call-arg]

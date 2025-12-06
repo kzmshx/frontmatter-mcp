@@ -1,8 +1,12 @@
 """MCP Server implementation using FastMCP."""
 
 import glob as globmodule
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    import duckdb
+
 from pathlib import Path
-from typing import Any
 
 import frontmatter
 from fastmcp import FastMCP
@@ -57,7 +61,6 @@ def query_inspect(glob: str) -> dict[str, Any]:
 
     Returns:
         Dict with file_count, schema (type, count, nullable, sample_values).
-        If semantic search is enabled and ready, schema includes embedding field.
     """
     base = get_base_dir()
     paths = _collect_files(glob)
@@ -68,7 +71,7 @@ def query_inspect(glob: str) -> dict[str, Any]:
     if get_settings().enable_semantic and is_indexing_ready():
         model = get_embedding_model()
 
-        def schema_extender(schema: dict, recs: list) -> None:
+        def schema_extender(schema: dict[str, Any], recs: list[dict[str, Any]]) -> None:
             extend_schema_semantic(schema, recs, model)
 
     schema = infer_schema(records, schema_extender=schema_extender)
@@ -107,7 +110,7 @@ def query(glob: str, sql: str) -> dict[str, Any]:
         model = get_embedding_model()
         semantic = SemanticContext(embeddings=cache.get_all(), model=model)
 
-        def conn_setup_func(conn) -> None:
+        def conn_setup_func(conn: "duckdb.DuckDBPyConnection") -> None:
             setup_semantic_search(conn, semantic)
 
     query_result = execute_query(records, sql, conn_setup=conn_setup_func)
