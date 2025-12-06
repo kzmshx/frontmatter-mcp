@@ -10,22 +10,22 @@ from sentence_transformers import SentenceTransformer
 class EmbeddingModel:
     """Lazy-loading wrapper for sentence-transformers model."""
 
-    def __init__(self, model_name: str) -> None:
+    def __init__(self, name: str) -> None:
         """Initialize the embedding model wrapper.
 
         Args:
             model_name: Name of the sentence-transformers model to use.
         """
-        self._model_name = model_name
+        self._name = name
         self._model: SentenceTransformer | None = None
 
     @property
-    def model_name(self) -> str:
+    def name(self) -> str:
         """Get the model name."""
-        return self._model_name
+        return self._name
 
     @property
-    def model(self) -> "SentenceTransformer":
+    def model(self) -> SentenceTransformer:
         """Get the model, loading it if necessary."""
         if self._model is None:
             self._load_model()
@@ -34,7 +34,7 @@ class EmbeddingModel:
 
     def _load_model(self) -> None:
         """Load the sentence-transformers model."""
-        self._model = SentenceTransformer(self._model_name)
+        self._model = SentenceTransformer(self._name)
 
     @property
     def is_loaded(self) -> bool:

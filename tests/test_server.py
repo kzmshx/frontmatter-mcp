@@ -456,15 +456,14 @@ class TestSemanticSearchTools:
         from frontmatter_mcp.semantic.context import SemanticContext
 
         mock_model = MagicMock()
-        mock_model.model_name = "test-model"
+        mock_model.name = "test-model"
         mock_model.get_dimension.return_value = 256
         mock_model.encode.return_value = np.random.rand(256).astype(np.float32)
 
         # Create real cache and indexer with mock model
         cache = EmbeddingCache(
             cache_dir=semantic_base_dir / ".cache",
-            model_name="test-model",
-            dimension=256,
+            model=mock_model,
         )
 
         def get_files() -> list:

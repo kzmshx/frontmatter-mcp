@@ -1,11 +1,21 @@
 """Tests for semantic cache module."""
 
 from pathlib import Path
+from typing import Generator
+from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
 
 from frontmatter_mcp.semantic.cache import CACHE_DB_NAME, EmbeddingCache
+
+
+def create_mock_model(name: str = "test-model", dimension: int = 256) -> MagicMock:
+    """Create a mock EmbeddingModel."""
+    mock = MagicMock()
+    mock.name = name
+    mock.get_dimension.return_value = dimension
+    return mock
 
 
 class TestEmbeddingCache:
@@ -17,9 +27,10 @@ class TestEmbeddingCache:
         return tmp_path / ".frontmatter-mcp"
 
     @pytest.fixture
-    def cache(self, cache_dir: Path) -> EmbeddingCache:
+    def cache(self, cache_dir: Path) -> Generator[EmbeddingCache, None, None]:
         """Create a cache instance."""
-        cache = EmbeddingCache(cache_dir, model_name="test-model", dimension=256)
+        mock_model = create_mock_model()
+        cache = EmbeddingCache(cache_dir, model=mock_model)
         yield cache
         cache.close()
 
@@ -181,14 +192,16 @@ class TestEmbeddingCacheModelChange:
     def test_model_change_clears_cache(self, cache_dir: Path) -> None:
         """Changing model clears existing cache."""
         # Create cache with first model
-        cache1 = EmbeddingCache(cache_dir, model_name="model-v1", dimension=256)
+        mock_model1 = create_mock_model(name="model-v1", dimension=256)
+        cache1 = EmbeddingCache(cache_dir, model=mock_model1)
         vector = np.random.rand(256).astype(np.float32)
         cache1.set("test.md", 1000.0, vector)
         assert cache1.count() == 1
         cache1.close()
 
         # Create cache with different model
-        cache2 = EmbeddingCache(cache_dir, model_name="model-v2", dimension=256)
+        mock_model2 = create_mock_model(name="model-v2", dimension=256)
+        cache2 = EmbeddingCache(cache_dir, model=mock_model2)
         assert cache2.count() == 0  # Cache should be cleared
 
         # Metadata should be updated
@@ -201,12 +214,14 @@ class TestEmbeddingCacheModelChange:
     def test_same_model_preserves_cache(self, cache_dir: Path) -> None:
         """Same model preserves existing cache."""
         # Create cache with model
-        cache1 = EmbeddingCache(cache_dir, model_name="test-model", dimension=256)
+        mock_model1 = create_mock_model(name="test-model", dimension=256)
+        cache1 = EmbeddingCache(cache_dir, model=mock_model1)
         vector = np.random.rand(256).astype(np.float32)
         cache1.set("test.md", 1000.0, vector)
         cache1.close()
 
         # Reopen with same model
-        cache2 = EmbeddingCache(cache_dir, model_name="test-model", dimension=256)
+        mock_model2 = create_mock_model(name="test-model", dimension=256)
+        cache2 = EmbeddingCache(cache_dir, model=mock_model2)
         assert cache2.count() == 1  # Cache should be preserved
         cache2.close()

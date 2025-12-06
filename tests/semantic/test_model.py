@@ -12,7 +12,7 @@ class TestEmbeddingModel:
     def test_model_name_is_preserved(self) -> None:
         """Model name is preserved."""
         model = EmbeddingModel("custom-model")
-        assert model.model_name == "custom-model"
+        assert model.name == "custom-model"
 
     def test_lazy_loading(self) -> None:
         """Model is not loaded until accessed."""

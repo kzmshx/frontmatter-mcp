@@ -5,6 +5,8 @@ from pathlib import Path
 import duckdb
 import numpy as np
 
+from frontmatter_mcp.semantic.model import EmbeddingModel
+
 # Cache database filename
 CACHE_DB_NAME = "embeddings.duckdb"
 
@@ -12,17 +14,18 @@ CACHE_DB_NAME = "embeddings.duckdb"
 class EmbeddingCache:
     """DuckDB-based cache for document embeddings."""
 
-    def __init__(self, cache_dir: Path, model_name: str, dimension: int) -> None:
+    def __init__(self, cache_dir: Path, model: EmbeddingModel) -> None:
         """Initialize the embedding cache.
+
+        The database connection is lazy-initialized on first access.
+        This allows the model to be loaded only when actually needed.
 
         Args:
             cache_dir: Directory to store the cache database.
-            model_name: Name of the embedding model.
-            dimension: Dimension of the embedding vectors.
+            model: Embedding model (used for model name and dimension).
         """
         self._cache_dir = cache_dir
-        self._model_name = model_name
-        self._dimension = dimension
+        self._model = model
         self._conn: duckdb.DuckDBPyConnection | None = None
 
     @property
@@ -47,12 +50,14 @@ class EmbeddingCache:
 
     def _init_schema(self) -> None:
         """Initialize database schema."""
+        dim = self._model.get_dimension()
+
         # Create embeddings table
         self.conn.execute(f"""
             CREATE TABLE IF NOT EXISTS embeddings (
                 path TEXT PRIMARY KEY,
                 mtime DOUBLE,
-                vector FLOAT[{self._dimension}]
+                vector FLOAT[{dim}]
             )
         """)
 
@@ -71,11 +76,11 @@ class EmbeddingCache:
         if result is None:
             self.conn.execute(
                 "INSERT INTO metadata (key, value) VALUES ('model_name', ?)",
-                [self._model_name],
+                [self._model.name],
             )
             self.conn.execute(
                 "INSERT INTO metadata (key, value) VALUES ('dimension', ?)",
-                [str(self._dimension)],
+                [str(dim)],
             )
 
     def _check_model_compatibility(self) -> None:
@@ -84,17 +89,17 @@ class EmbeddingCache:
             "SELECT value FROM metadata WHERE key = 'model_name'"
         ).fetchone()
 
-        if result is not None and result[0] != self._model_name:
+        if result is not None and result[0] != self._model.name:
             # Model changed, clear cache
             self.clear()
             # Update metadata
             self.conn.execute(
                 "UPDATE metadata SET value = ? WHERE key = 'model_name'",
-                [self._model_name],
+                [self._model.name],
             )
             self.conn.execute(
                 "UPDATE metadata SET value = ? WHERE key = 'dimension'",
-                [str(self._dimension)],
+                [str(self._model.get_dimension())],
             )
 
     def clear(self) -> None:

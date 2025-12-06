@@ -14,13 +14,8 @@ class SemanticContext:
     """Context for semantic search operations."""
 
     model: EmbeddingModel
-    """Embedding model for encoding text."""
-
     cache: EmbeddingCache
-    """Cache for storing embeddings."""
-
     indexer: EmbeddingIndexer
-    """Indexer for building and updating embeddings."""
 
     @property
     def is_ready(self) -> bool:
@@ -31,19 +26,17 @@ class SemanticContext:
 def get_semantic_context(settings: Settings) -> SemanticContext:
     """Create a semantic context instance.
 
+    The model is lazy-loaded when first needed (e.g., when cache connects
+    or when encoding text). This allows the MCP server to start quickly.
+
     Args:
         settings: Application settings.
-        ctx: Core application context.
 
     Returns:
         SemanticContext with model, cache, and indexer.
     """
     model = EmbeddingModel(settings.embedding_model)
-    cache = EmbeddingCache(
-        cache_dir=settings.cache_dir,
-        model_name=model.model_name,
-        dimension=model.get_dimension(),
-    )
+    cache = EmbeddingCache(cache_dir=settings.cache_dir, model=model)
 
     def get_files() -> list[Path]:
         return list(settings.base_dir.rglob("*.md"))

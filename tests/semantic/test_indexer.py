@@ -2,6 +2,7 @@
 
 import time
 from pathlib import Path
+from typing import Generator
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -26,19 +27,22 @@ class TestEmbeddingIndexer:
         return base
 
     @pytest.fixture
-    def cache(self, cache_dir: Path) -> EmbeddingCache:
-        """Create a cache instance."""
-        cache = EmbeddingCache(cache_dir, model_name="test-model", dimension=256)
-        yield cache
-        cache.close()
-
-    @pytest.fixture
     def mock_model(self) -> MagicMock:
         """Create a mock embedding model."""
         model = MagicMock()
+        model.name = "test-model"
         model.encode.return_value = np.random.rand(256).astype(np.float32)
         model.get_dimension.return_value = 256
         return model
+
+    @pytest.fixture
+    def cache(
+        self, cache_dir: Path, mock_model: MagicMock
+    ) -> Generator[EmbeddingCache, None, None]:
+        """Create a cache instance."""
+        cache = EmbeddingCache(cache_dir, model=mock_model)
+        yield cache
+        cache.close()
 
     def _create_md_file(self, base_dir: Path, name: str, content: str) -> Path:
         """Create a markdown file with frontmatter."""
