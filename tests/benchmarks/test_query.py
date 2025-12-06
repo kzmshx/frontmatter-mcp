@@ -1,5 +1,6 @@
 """Benchmark tests for query performance."""
 
+from pathlib import Path
 from typing import Any, Callable
 
 import pytest
@@ -18,7 +19,7 @@ class TestParseFilesBenchmark:
     def test_parse_files(
         self,
         benchmark: BenchmarkFixture,
-        benchmark_dir_factory: Callable[[int, int], Any],
+        benchmark_dir_factory: Callable[[int], Path],
         file_count: int,
     ) -> None:
         """Measure file parsing time."""
@@ -38,7 +39,7 @@ class TestCreateConnectionBenchmark:
     def test_create_connection(
         self,
         benchmark: BenchmarkFixture,
-        benchmark_dir_factory: Callable[[int, int], Any],
+        benchmark_dir_factory: Callable[[int], Path],
         file_count: int,
     ) -> None:
         """Measure DuckDB connection and table creation time."""
@@ -60,7 +61,7 @@ class TestExecuteQueryBenchmark:
     def test_select_all(
         self,
         benchmark: BenchmarkFixture,
-        benchmark_dir_factory: Callable[[int, int], Any],
+        benchmark_dir_factory: Callable[[int], Path],
         file_count: int,
     ) -> None:
         """Measure simple SELECT * query time."""
@@ -77,7 +78,7 @@ class TestExecuteQueryBenchmark:
     def test_where_order_limit(
         self,
         benchmark: BenchmarkFixture,
-        benchmark_dir_factory: Callable[[int, int], Any],
+        benchmark_dir_factory: Callable[[int], Path],
         file_count: int,
     ) -> None:
         """Measure query with WHERE, ORDER BY, and LIMIT."""
@@ -105,7 +106,7 @@ class TestQueryE2EBenchmark:
     def test_query_e2e(
         self,
         benchmark: BenchmarkFixture,
-        benchmark_dir_factory: Callable[[int, int], Any],
+        benchmark_dir_factory: Callable[[int], Path],
         file_count: int,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
@@ -124,10 +125,9 @@ class TestQueryE2EBenchmark:
         def run_query() -> dict[str, Any]:
             return server_module.query.fn("*.md", "SELECT * FROM files")
 
-        result = benchmark(run_query)
-
-        assert result["row_count"] == file_count
-
-        # Cleanup
-        server_module._settings = None
-        get_settings.cache_clear()
+        try:
+            result = benchmark(run_query)
+            assert result["row_count"] == file_count
+        finally:
+            server_module._settings = None
+            get_settings.cache_clear()

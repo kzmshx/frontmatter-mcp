@@ -1,6 +1,7 @@
 """Benchmark tests for semantic search query performance."""
 
-from typing import Any, Callable
+from pathlib import Path
+from typing import Callable
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -39,7 +40,7 @@ class TestAddSemanticColumnsBenchmark:
     def test_add_semantic_columns(
         self,
         benchmark: BenchmarkFixture,
-        benchmark_dir_factory: Callable[[int, int], Any],
+        benchmark_dir_factory: Callable[[int], Path],
         file_count: int,
     ) -> None:
         """Measure time to add semantic columns (VSS extension + embeddings)."""
@@ -63,7 +64,7 @@ class TestSemanticQueryBenchmark:
     def test_cosine_similarity_query(
         self,
         benchmark: BenchmarkFixture,
-        benchmark_dir_factory: Callable[[int, int], Any],
+        benchmark_dir_factory: Callable[[int], Path],
         file_count: int,
     ) -> None:
         """Measure cosine similarity query time."""
