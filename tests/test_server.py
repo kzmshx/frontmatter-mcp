@@ -499,16 +499,15 @@ class TestSemanticSearchTools:
         assert result["state"] == "ready"
         assert "indexed_count" in result
 
-    def test_index_wait_timeout(
+    def test_index_wait_idle(
         self, semantic_base_dir: Path, mock_semantic_context
     ) -> None:
-        """index_wait returns success=false on timeout."""
-        # Don't start indexing, just check wait behavior when idle
+        """index_wait returns success=true immediately when idle."""
         result = _call(server_module.index_wait, 0.1)
 
         # When idle (never started), wait returns immediately with success=true
-        assert "success" in result
-        assert "state" in result
+        assert result["success"] is True
+        assert result["state"] == "idle"
 
     def test_index_refresh_enabled(
         self, semantic_base_dir: Path, mock_semantic_context

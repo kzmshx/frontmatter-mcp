@@ -194,8 +194,8 @@ def index_wait(timeout: float = 60.0) -> Response:
 
     Returns:
         Dict with success (bool), state, and indexed_count.
-        - success=true: Indexing completed, semantic search is ready
-        - success=false: Timeout reached, indexing still in progress
+        - success=true: Indexing completed or idle (not started)
+        - success=false: Timeout reached while indexing in progress
     """
     assert _semantic_ctx is not None
     completed = _semantic_ctx.indexer.wait(timeout=timeout)
