@@ -11,83 +11,115 @@ from pathlib import Path
 import frontmatter
 from fastmcp import FastMCP
 
-from frontmatter_mcp.context import (
-    get_base_dir,
-    get_embedding_cache,
-    get_embedding_model,
-    get_indexer,
-    is_indexing_ready,
-)
 from frontmatter_mcp.frontmatter import parse_files, update_file
 from frontmatter_mcp.query import execute_query
-from frontmatter_mcp.schema import infer_schema
+from frontmatter_mcp.query_schema import Schema, add_frontmatter_columns
 from frontmatter_mcp.semantic import (
     SemanticContext,
-    extend_schema_semantic,
+    get_semantic_context,
     setup_semantic_search,
 )
-from frontmatter_mcp.settings import get_settings
+from frontmatter_mcp.semantic.query_schema import add_semantic_columns
+from frontmatter_mcp.settings import Settings, get_settings
+
+Response = dict[str, Any]
 
 mcp = FastMCP("frontmatter-mcp")
 
+_settings: Settings | None = None
+_semantic_ctx: SemanticContext | None = None
 
-def _collect_files(glob_pattern: str) -> list[Path]:
+
+def _collect_files(base_dir: Path, glob_pattern: str) -> list[Path]:
     """Collect files matching the glob pattern."""
-    base = get_base_dir()
-    pattern = str(base / glob_pattern)
+    pattern = str(base_dir / glob_pattern)
     matches = globmodule.glob(pattern, recursive=True)
     return [Path(p) for p in matches if Path(p).is_file()]
 
 
-def _build_batch_response(
-    updated_files: list[str], warnings: list[str]
-) -> dict[str, Any]:
-    """Build response dict for batch operations."""
-    response: dict[str, Any] = {
-        "updated_count": len(updated_files),
-        "updated_files": updated_files,
-    }
+def _build_response(
+    results: dict[str, Any], warnings: list[Any] | None = None
+) -> Response:
+    """Build response dict for single operations."""
+    response: dict[str, Any] = results
     if warnings:
         response["warnings"] = warnings
     return response
 
 
+def _build_batch_response(updated_files: list[str], warnings: list[str]) -> Response:
+    """Build response dict for batch operations."""
+    return _build_response(
+        {
+            "updated_count": len(updated_files),
+            "updated_files": updated_files,
+        },
+        warnings,
+    )
+
+
+def _resolve_path(base_dir: Path, rel_path: str) -> Path:
+    """Resolve relative path and validate it's within base_dir and exists.
+
+    Args:
+        base_dir: Base directory (already resolved).
+        rel_path: Relative path from base_dir.
+
+    Returns:
+        Resolved absolute path.
+
+    Raises:
+        ValueError: If path is outside base_dir.
+        FileNotFoundError: If file doesn't exist.
+    """
+    abs_path = (base_dir / rel_path).resolve()
+
+    try:
+        abs_path.relative_to(base_dir)
+    except ValueError as e:
+        raise ValueError(f"Path must be within base directory: {rel_path}") from e
+
+    if not abs_path.exists():
+        raise FileNotFoundError(f"File not found: {rel_path}")
+
+    return abs_path
+
+
 @mcp.tool()
-def query_inspect(glob: str) -> dict[str, Any]:
+def query_inspect(glob: str) -> Response:
     """Get frontmatter schema from files matching glob pattern.
 
     Args:
         glob: Glob pattern relative to base directory (e.g. "atoms/**/*.md").
 
     Returns:
-        Dict with file_count, schema (type, count, nullable, sample_values).
+        Dict with file_count, schema (type, nullable, examples).
     """
-    base = get_base_dir()
-    paths = _collect_files(glob)
-    records, warnings = parse_files(paths, base)
+    assert _settings is not None
 
-    # Prepare schema extender if semantic search is ready
-    schema_extender = None
-    if get_settings().enable_semantic and is_indexing_ready():
-        model = get_embedding_model()
+    paths = _collect_files(_settings.base_dir, glob)
+    records, warnings = parse_files(paths, _settings.base_dir)
+    schema: Schema = {}
 
-        def schema_extender(schema: dict[str, Any], recs: list[dict[str, Any]]) -> None:
-            extend_schema_semantic(schema, recs, model)
+    add_frontmatter_columns(schema, records)
 
-    schema = infer_schema(records, schema_extender=schema_extender)
+    # Add semantic columns if semantic search is ready
+    if _settings.enable_semantic:
+        assert _semantic_ctx is not None
+        if _semantic_ctx.is_ready:
+            add_semantic_columns(schema, _semantic_ctx)
 
-    result: dict[str, Any] = {
-        "file_count": len(records),
-        "schema": schema,
-    }
-    if warnings:
-        result["warnings"] = warnings
-
-    return result
+    return _build_response(
+        {
+            "file_count": len(records),
+            "schema": schema,
+        },
+        warnings,
+    )
 
 
 @mcp.tool()
-def query(glob: str, sql: str) -> dict[str, Any]:
+def query(glob: str, sql: str) -> Response:
     """Query frontmatter with DuckDB SQL.
 
     Args:
@@ -99,35 +131,34 @@ def query(glob: str, sql: str) -> dict[str, Any]:
     Returns:
         Dict with results array, row_count, and columns.
     """
-    base = get_base_dir()
-    paths = _collect_files(glob)
-    records, warnings = parse_files(paths, base)
+    assert _settings is not None
+
+    paths = _collect_files(_settings.base_dir, glob)
+    records, warnings = parse_files(paths, _settings.base_dir)
 
     # Prepare semantic search if enabled and indexing complete
     conn_setup_func = None
-    if get_settings().enable_semantic and is_indexing_ready():
-        cache = get_embedding_cache()
-        model = get_embedding_model()
-        semantic = SemanticContext(embeddings=cache.get_all(), model=model)
+    if _settings.enable_semantic:
+        assert _semantic_ctx is not None
+        if _semantic_ctx.is_ready:
 
-        def conn_setup_func(conn: "duckdb.DuckDBPyConnection") -> None:
-            setup_semantic_search(conn, semantic)
+            def conn_setup_func(conn: "duckdb.DuckDBPyConnection") -> None:
+                setup_semantic_search(conn, _semantic_ctx)
 
     query_result = execute_query(records, sql, conn_setup=conn_setup_func)
 
-    result: dict[str, Any] = {
-        "results": query_result["results"],
-        "row_count": query_result["row_count"],
-        "columns": query_result["columns"],
-    }
-    if warnings:
-        result["warnings"] = warnings
-
-    return result
+    return _build_response(
+        {
+            "results": query_result["results"],
+            "row_count": query_result["row_count"],
+            "columns": query_result["columns"],
+        },
+        warnings,
+    )
 
 
 @mcp.tool(enabled=False)
-def index_status() -> dict[str, Any]:
+def index_status() -> Response:
     """Get the status of the semantic search index.
 
     Returns:
@@ -136,15 +167,17 @@ def index_status() -> dict[str, Any]:
         - indexing: Indexing is in progress (indexed_count shows progress)
         - ready: Indexing completed, embed() and embedding column available
     """
-    indexer = get_indexer()
-    return {
-        "state": indexer.state.value,
-        "indexed_count": indexer.indexed_count,
-    }
+    assert _semantic_ctx is not None
+    return _build_response(
+        {
+            "state": _semantic_ctx.indexer.state.value,
+            "indexed_count": _semantic_ctx.indexer.indexed_count,
+        }
+    )
 
 
 @mcp.tool(enabled=False)
-def index_refresh() -> dict[str, Any]:
+def index_refresh() -> Response:
     """Refresh the semantic search index (differential update).
 
     Starts background indexing. On first run, indexes all files.
@@ -158,15 +191,14 @@ def index_refresh() -> dict[str, Any]:
     Notes:
         Call this after editing files during a session to update the index.
     """
-    return get_indexer().start()
+    assert _semantic_ctx is not None
+    return _build_response(_semantic_ctx.indexer.start())
 
 
 @mcp.tool()
 def update(
-    path: str,
-    set: dict[str, Any] | None = None,
-    unset: list[str] | None = None,
-) -> dict[str, Any]:
+    path: str, set: dict[str, Any] | None = None, unset: list[str] | None = None
+) -> Response:
     """Update frontmatter properties in a single file.
 
     Args:
@@ -182,27 +214,18 @@ def update(
         - If same key appears in both set and unset, unset takes priority.
         - If file has no frontmatter, it will be created.
     """
-    base = get_base_dir().resolve()
-    abs_path = (base / path).resolve()
+    assert _settings is not None
 
-    # Security: ensure path is within base_dir
-    try:
-        abs_path.relative_to(base)
-    except ValueError as e:
-        raise ValueError(f"Path must be within base directory: {path}") from e
+    base_dir = _settings.base_dir
+    abs_path = _resolve_path(base_dir, path)
 
-    if not abs_path.exists():
-        raise FileNotFoundError(f"File not found: {path}")
-
-    return update_file(abs_path, base, set_values=set, unset=unset)
+    return _build_response(update_file(abs_path, base_dir, set_values=set, unset=unset))
 
 
 @mcp.tool()
 def batch_update(
-    glob: str,
-    set: dict[str, Any] | None = None,
-    unset: list[str] | None = None,
-) -> dict[str, Any]:
+    glob: str, set: dict[str, Any] | None = None, unset: list[str] | None = None
+) -> Response:
     """Update frontmatter properties in multiple files matching glob pattern.
 
     Args:
@@ -218,44 +241,35 @@ def batch_update(
         - If a file has no frontmatter, it will be created.
         - Errors in individual files are recorded in warnings, not raised.
     """
-    base = get_base_dir().resolve()
-    paths = _collect_files(glob)
+    assert _settings is not None
+
+    base_dir = _settings.base_dir
+    paths = _collect_files(base_dir, glob)
 
     updated_files: list[str] = []
     warnings: list[str] = []
 
     for file_path in paths:
-        abs_path = file_path.resolve()
+        rel_path = str(file_path.relative_to(base_dir))
         try:
-            abs_path.relative_to(base)
-        except ValueError:
-            warnings.append(f"Skipped (outside base directory): {abs_path}")
+            abs_path = _resolve_path(base_dir, rel_path)
+        except (ValueError, FileNotFoundError) as e:
+            warnings.append(str(e))
             continue
 
         try:
-            update_result = update_file(abs_path, base, set_values=set, unset=unset)
+            update_result = update_file(abs_path, base_dir, set_values=set, unset=unset)
             updated_files.append(update_result["path"])
         except Exception as e:
-            rel_path = abs_path.relative_to(base)
             warnings.append(f"Failed to update {rel_path}: {e}")
 
-    response: dict[str, Any] = {
-        "updated_count": len(updated_files),
-        "updated_files": updated_files,
-    }
-    if warnings:
-        response["warnings"] = warnings
-
-    return response
+    return _build_batch_response(updated_files, warnings)
 
 
 @mcp.tool()
 def batch_array_add(
-    glob: str,
-    property: str,
-    value: Any,
-    allow_duplicates: bool = False,
-) -> dict[str, Any]:
+    glob: str, property: str, value: Any, allow_duplicates: bool = False
+) -> Response:
     """Add a value to an array property in multiple files.
 
     Args:
@@ -272,19 +286,20 @@ def batch_array_add(
         - If property is not an array, file is skipped with a warning.
         - Files are only included in updated_files if actually modified.
     """
+    assert _settings is not None
 
-    base = get_base_dir().resolve()
-    paths = _collect_files(glob)
+    base_dir = _settings.base_dir
+    paths = _collect_files(base_dir, glob)
 
     updated_files: list[str] = []
     warnings: list[str] = []
 
     for file_path in paths:
-        abs_path = file_path.resolve()
+        rel_path = str(file_path.relative_to(base_dir))
         try:
-            rel_path = str(abs_path.relative_to(base))
-        except ValueError:
-            warnings.append(f"Skipped (outside base directory): {abs_path}")
+            abs_path = _resolve_path(base_dir, rel_path)
+        except (ValueError, FileNotFoundError) as e:
+            warnings.append(str(e))
             continue
 
         try:
@@ -319,11 +334,7 @@ def batch_array_add(
 
 
 @mcp.tool()
-def batch_array_remove(
-    glob: str,
-    property: str,
-    value: Any,
-) -> dict[str, Any]:
+def batch_array_remove(glob: str, property: str, value: Any) -> Response:
     """Remove a value from an array property in multiple files.
 
     Args:
@@ -340,19 +351,20 @@ def batch_array_remove(
         - If property is not an array, file is skipped with a warning.
         - Files are only included in updated_files if actually modified.
     """
+    assert _settings is not None
 
-    base = get_base_dir().resolve()
-    paths = _collect_files(glob)
+    base_dir = _settings.base_dir
+    paths = _collect_files(base_dir, glob)
 
     updated_files: list[str] = []
     warnings: list[str] = []
 
     for file_path in paths:
-        abs_path = file_path.resolve()
+        rel_path = str(file_path.relative_to(base_dir))
         try:
-            rel_path = str(abs_path.relative_to(base))
-        except ValueError:
-            warnings.append(f"Skipped (outside base directory): {abs_path}")
+            abs_path = _resolve_path(base_dir, rel_path)
+        except (ValueError, FileNotFoundError) as e:
+            warnings.append(str(e))
             continue
 
         try:
@@ -385,11 +397,8 @@ def batch_array_remove(
 
 @mcp.tool()
 def batch_array_replace(
-    glob: str,
-    property: str,
-    old_value: Any,
-    new_value: Any,
-) -> dict[str, Any]:
+    glob: str, property: str, old_value: Any, new_value: Any
+) -> Response:
     """Replace a value in an array property in multiple files.
 
     Args:
@@ -407,19 +416,20 @@ def batch_array_replace(
         - If property is not an array, file is skipped with a warning.
         - Files are only included in updated_files if actually modified.
     """
+    assert _settings is not None
 
-    base = get_base_dir().resolve()
-    paths = _collect_files(glob)
+    base_dir = _settings.base_dir
+    paths = _collect_files(base_dir, glob)
 
     updated_files: list[str] = []
     warnings: list[str] = []
 
     for file_path in paths:
-        abs_path = file_path.resolve()
+        rel_path = str(file_path.relative_to(base_dir))
         try:
-            rel_path = str(abs_path.relative_to(base))
-        except ValueError:
-            warnings.append(f"Skipped (outside base directory): {abs_path}")
+            abs_path = _resolve_path(base_dir, rel_path)
+        except (ValueError, FileNotFoundError) as e:
+            warnings.append(str(e))
             continue
 
         try:
@@ -452,11 +462,7 @@ def batch_array_replace(
 
 
 @mcp.tool()
-def batch_array_sort(
-    glob: str,
-    property: str,
-    reverse: bool = False,
-) -> dict[str, Any]:
+def batch_array_sort(glob: str, property: str, reverse: bool = False) -> Response:
     """Sort an array property in multiple files.
 
     Args:
@@ -474,19 +480,20 @@ def batch_array_sort(
         - If property is not an array, file is skipped with a warning.
         - Files are only included in updated_files if actually modified.
     """
+    assert _settings is not None
 
-    base = get_base_dir().resolve()
-    paths = _collect_files(glob)
+    base_dir = _settings.base_dir
+    paths = _collect_files(base_dir, glob)
 
     updated_files: list[str] = []
     warnings: list[str] = []
 
     for file_path in paths:
-        abs_path = file_path.resolve()
+        rel_path = str(file_path.relative_to(base_dir))
         try:
-            rel_path = str(abs_path.relative_to(base))
-        except ValueError:
-            warnings.append(f"Skipped (outside base directory): {abs_path}")
+            abs_path = _resolve_path(base_dir, rel_path)
+        except (ValueError, FileNotFoundError) as e:
+            warnings.append(str(e))
             continue
 
         try:
@@ -530,20 +537,16 @@ def batch_array_sort(
 
 
 def main() -> None:
-    """Entry point for the MCP server.
+    """Entry point for the MCP server."""
+    global _settings, _semantic_ctx
 
-    Requires FRONTMATTER_BASE_DIR environment variable to be set.
-    """
-    # Validate base_dir on startup
-    base_dir = get_base_dir()
-    if not base_dir.is_dir():
-        raise RuntimeError(f"Base directory does not exist: {base_dir}")
+    _settings = get_settings()
 
-    # Enable and start semantic search if configured
-    if get_settings().enable_semantic:
+    if _settings.enable_semantic:
+        _semantic_ctx = get_semantic_context(_settings)
+        _semantic_ctx.indexer.start()
         index_status.enable()
         index_refresh.enable()
-        get_indexer().start()
 
     mcp.run()
 

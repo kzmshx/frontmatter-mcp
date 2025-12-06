@@ -1,12 +1,25 @@
 """Tests for DuckDB query module."""
 
 from datetime import date
+from typing import Any
 from unittest.mock import MagicMock
 
 import numpy as np
 
 from frontmatter_mcp.query import execute_query
-from frontmatter_mcp.semantic import SemanticContext, setup_semantic_search
+from frontmatter_mcp.semantic import setup_semantic_search
+from frontmatter_mcp.semantic.context import SemanticContext
+
+
+def create_mock_semantic_context(
+    embeddings: dict[str, np.ndarray[Any, Any]],
+    model: MagicMock,
+) -> SemanticContext:
+    """Create a mock SemanticContext for testing."""
+    mock_cache = MagicMock()
+    mock_cache.get_all.return_value = embeddings
+    mock_indexer = MagicMock()
+    return SemanticContext(model=model, cache=mock_cache, indexer=mock_indexer)
 
 
 class TestExecuteQuery:
@@ -213,7 +226,7 @@ class TestSemanticSearch:
         mock_model.get_dimension.return_value = 256
         mock_model.encode.return_value = np.random.rand(256).astype(np.float32)
 
-        semantic = SemanticContext(embeddings=embeddings, model=mock_model)
+        semantic = create_mock_semantic_context(embeddings, mock_model)
         result = execute_query(
             records,
             "SELECT path, embedding FROM files",
@@ -234,7 +247,7 @@ class TestSemanticSearch:
         mock_model.encode.return_value = np.random.rand(256).astype(np.float32)
 
         # Use embed() function in SQL
-        semantic = SemanticContext(embeddings=embeddings, model=mock_model)
+        semantic = create_mock_semantic_context(embeddings, mock_model)
         result = execute_query(
             records,
             "SELECT path, embed('test query') as query_vec FROM files",
@@ -262,7 +275,7 @@ class TestSemanticSearch:
         mock_model.get_dimension.return_value = 256
         mock_model.encode.return_value = query_vec
 
-        semantic = SemanticContext(embeddings=embeddings, model=mock_model)
+        semantic = create_mock_semantic_context(embeddings, mock_model)
         result = execute_query(
             records,
             """
@@ -289,7 +302,7 @@ class TestSemanticSearch:
         mock_model = MagicMock()
         mock_model.get_dimension.return_value = 256
 
-        semantic = SemanticContext(embeddings=embeddings, model=mock_model)
+        semantic = create_mock_semantic_context(embeddings, mock_model)
         result = execute_query(
             records,
             "SELECT path, embedding FROM files ORDER BY path",

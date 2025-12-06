@@ -22,7 +22,10 @@ class Settings(BaseSettings):
     @property
     def base_dir(self) -> Path:
         """Base directory for markdown files."""
-        return self.frontmatter_base_dir
+        base_dir = self.frontmatter_base_dir.resolve()
+        if not base_dir.is_dir():
+            raise RuntimeError(f"Base directory does not exist: {base_dir}")
+        return base_dir
 
     @property
     def enable_semantic(self) -> bool:
