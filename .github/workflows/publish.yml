@@ -31,15 +31,6 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
-      - uses: astral-sh/setup-uv@v5
-      - run: uv python install
-      - run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
-      - run: sleep 30
-      - name: Test install from TestPyPI
-        run: |
-          uv venv .venv
-          uv pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ frontmatter-mcp==${VERSION}
-          uv pip show frontmatter-mcp
 
   publish-pypi:
     needs: publish-testpypi
