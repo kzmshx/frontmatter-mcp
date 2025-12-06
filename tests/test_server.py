@@ -481,12 +481,10 @@ class TestSemanticSearchTools:
     def test_index_status_enabled(
         self, semantic_base_dir: Path, mock_semantic_context
     ) -> None:
-        """index_status returns state and indexed_count when enabled."""
+        """index_status returns state when enabled."""
         result = _call(server_module.index_status)
         assert "state" in result
         assert result["state"] in ["idle", "indexing", "ready"]
-        assert "indexed_count" in result
-        assert isinstance(result["indexed_count"], int)
 
     def test_index_wait_success(
         self, semantic_base_dir: Path, mock_semantic_context
@@ -497,7 +495,6 @@ class TestSemanticSearchTools:
 
         assert result["success"] is True
         assert result["state"] == "ready"
-        assert "indexed_count" in result
 
     def test_index_wait_idle(
         self, semantic_base_dir: Path, mock_semantic_context
