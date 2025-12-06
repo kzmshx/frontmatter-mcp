@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.3](https://github.com/kzmshx/frontmatter-mcp/compare/v0.4.2...v0.4.3) (2025-12-06)
+
+
+### Bug Fixes
+
+* remove indexed_count from index_status and index_wait responses ([#34](https://github.com/kzmshx/frontmatter-mcp/issues/34)) ([d5928f5](https://github.com/kzmshx/frontmatter-mcp/commit/d5928f5ff8a8beb2e7bc6c71aef490d95bac74b6))
+
+
+### Performance
+
+* add mtime-based in-memory cache for parse_files ([#33](https://github.com/kzmshx/frontmatter-mcp/issues/33)) ([c902d24](https://github.com/kzmshx/frontmatter-mcp/commit/c902d24b909702f40e3c26d1e095e10fe28186bc))
+* use PyArrow bulk insert for semantic embeddings ([#31](https://github.com/kzmshx/frontmatter-mcp/issues/31)) ([4a13ac7](https://github.com/kzmshx/frontmatter-mcp/commit/4a13ac73d5a827a919459d47bf3be56c8d4dfcf8))
+
 ## [0.4.2](https://github.com/kzmshx/frontmatter-mcp/compare/v0.4.1...v0.4.2) (2025-12-06)
 
 
