@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 from pytest_benchmark.fixture import BenchmarkFixture
 
-from frontmatter_mcp.files import parse_files
+from frontmatter_mcp.files import FileRecordCache, parse_files
 from frontmatter_mcp.query import create_base_connection, execute_query
 from frontmatter_mcp.semantic import add_semantic_columns
 from frontmatter_mcp.semantic.context import SemanticContext
@@ -46,7 +46,7 @@ class TestAddSemanticColumnsBenchmark:
         """Measure time to add semantic columns (VSS extension + embeddings)."""
         base_dir = benchmark_dir_factory(file_count)
         paths = list(base_dir.glob("*.md"))
-        records, _ = parse_files(paths, base_dir)
+        records, _ = parse_files(paths, base_dir, FileRecordCache())
         relative_paths = [r["path"] for r in records]
 
         def setup_and_add_semantic() -> None:
@@ -70,7 +70,7 @@ class TestSemanticQueryBenchmark:
         """Measure cosine similarity query time."""
         base_dir = benchmark_dir_factory(file_count)
         paths = list(base_dir.glob("*.md"))
-        records, _ = parse_files(paths, base_dir)
+        records, _ = parse_files(paths, base_dir, FileRecordCache())
         relative_paths = [r["path"] for r in records]
 
         # Setup connection with semantic columns

@@ -6,7 +6,7 @@ from typing import Any, Callable
 import pytest
 from pytest_benchmark.fixture import BenchmarkFixture
 
-from frontmatter_mcp.files import parse_files
+from frontmatter_mcp.files import FileRecordCache, parse_files
 from frontmatter_mcp.query import create_base_connection, execute_query
 
 FILE_COUNTS = [100, 500, 1000]
@@ -16,17 +16,42 @@ class TestParseFilesBenchmark:
     """Benchmark for parse_files function."""
 
     @pytest.mark.parametrize("file_count", FILE_COUNTS)
-    def test_parse_files(
+    def test_parse_files_cached_cold(
         self,
         benchmark: BenchmarkFixture,
         benchmark_dir_factory: Callable[[int], Path],
         file_count: int,
     ) -> None:
-        """Measure file parsing time."""
+        """Measure file parsing time with empty cache (cold start)."""
         base_dir = benchmark_dir_factory(file_count)
         paths = list(base_dir.glob("*.md"))
 
-        records, warnings = benchmark(parse_files, paths, base_dir)
+        def parse_with_empty_cache() -> tuple[list[Any], list[Any]]:
+            cache = FileRecordCache()
+            return parse_files(paths, base_dir, cache)
+
+        records, warnings = benchmark(parse_with_empty_cache)
+
+        assert len(records) == file_count
+        assert len(warnings) == 0
+
+    @pytest.mark.parametrize("file_count", FILE_COUNTS)
+    def test_parse_files_cached_warm(
+        self,
+        benchmark: BenchmarkFixture,
+        benchmark_dir_factory: Callable[[int], Path],
+        file_count: int,
+    ) -> None:
+        """Measure file parsing time with warm cache (all hits)."""
+        base_dir = benchmark_dir_factory(file_count)
+        paths = list(base_dir.glob("*.md"))
+
+        # Warm up cache
+        cache = FileRecordCache()
+        parse_files(paths, base_dir, cache)
+
+        # Benchmark with warm cache
+        records, warnings = benchmark(parse_files, paths, base_dir, cache)
 
         assert len(records) == file_count
         assert len(warnings) == 0
@@ -45,7 +70,7 @@ class TestCreateConnectionBenchmark:
         """Measure DuckDB connection and table creation time."""
         base_dir = benchmark_dir_factory(file_count)
         paths = list(base_dir.glob("*.md"))
-        records, _ = parse_files(paths, base_dir)
+        records, _ = parse_files(paths, base_dir, FileRecordCache())
 
         conn = benchmark(create_base_connection, records)
 
@@ -67,7 +92,7 @@ class TestExecuteQueryBenchmark:
         """Measure simple SELECT * query time."""
         base_dir = benchmark_dir_factory(file_count)
         paths = list(base_dir.glob("*.md"))
-        records, _ = parse_files(paths, base_dir)
+        records, _ = parse_files(paths, base_dir, FileRecordCache())
         conn = create_base_connection(records)
 
         result = benchmark(execute_query, conn, "SELECT * FROM files")
@@ -84,7 +109,7 @@ class TestExecuteQueryBenchmark:
         """Measure query with WHERE, ORDER BY, and LIMIT."""
         base_dir = benchmark_dir_factory(file_count)
         paths = list(base_dir.glob("*.md"))
-        records, _ = parse_files(paths, base_dir)
+        records, _ = parse_files(paths, base_dir, FileRecordCache())
         conn = create_base_connection(records)
 
         sql = """

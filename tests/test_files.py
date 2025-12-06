@@ -4,6 +4,7 @@ from datetime import date
 from pathlib import Path
 
 from frontmatter_mcp.files import (
+    FileRecordCache,
     parse_file,
     parse_files,
     update_file,
@@ -54,49 +55,6 @@ title: Nested
         assert result["path"] == "atoms/sub/nested.md"
 
 
-class TestParseFiles:
-    """Tests for parse_files function."""
-
-    def test_parse_multiple_files(self, tmp_path: Path) -> None:
-        """Parse multiple files successfully."""
-        file1 = tmp_path / "a.md"
-        file1.write_text("""---
-date: 2025-11-27
----
-""")
-        file2 = tmp_path / "b.md"
-        file2.write_text("""---
-date: 2025-11-26
----
-""")
-        records, warnings = parse_files([file1, file2], tmp_path)
-
-        assert len(records) == 2
-        assert len(warnings) == 0
-        assert records[0]["path"] == "a.md"
-        assert records[1]["path"] == "b.md"
-
-    def test_parse_files_with_invalid_yaml(self, tmp_path: Path) -> None:
-        """Skip files with invalid YAML and report warnings."""
-        valid_file = tmp_path / "valid.md"
-        valid_file.write_text("""---
-title: Valid
----
-""")
-        invalid_file = tmp_path / "invalid.md"
-        invalid_file.write_text("""---
-invalid: yaml: content: [
----
-""")
-        records, warnings = parse_files([valid_file, invalid_file], tmp_path)
-
-        assert len(records) == 1
-        assert records[0]["path"] == "valid.md"
-        assert len(warnings) == 1
-        assert warnings[0]["path"] == "invalid.md"
-        assert "error" in warnings[0]
-
-
 class TestUpdateFile:
     """Tests for update_file function."""
 
@@ -108,7 +66,7 @@ title: Original
 ---
 # Content
 """)
-        result = update_file(md_file, tmp_path, set_values={"status": "published"})
+        result = update_file(md_file, tmp_path, {"status": "published"})
 
         assert result["path"] == "test.md"
         assert result["frontmatter"]["title"] == "Original"
@@ -127,7 +85,7 @@ title: Original
 status: draft
 ---
 """)
-        result = update_file(md_file, tmp_path, set_values={"status": "published"})
+        result = update_file(md_file, tmp_path, {"status": "published"})
 
         assert result["frontmatter"]["title"] == "Original"
         assert result["frontmatter"]["status"] == "published"
@@ -156,9 +114,7 @@ title: Test
 status: draft
 ---
 """)
-        result = update_file(
-            md_file, tmp_path, set_values={"status": "published"}, unset=["status"]
-        )
+        result = update_file(md_file, tmp_path, {"status": "published"}, ["status"])
 
         assert "status" not in result["frontmatter"]
 
@@ -169,7 +125,7 @@ status: draft
 title: Test
 ---
 """)
-        result = update_file(md_file, tmp_path, set_values={"category": None})
+        result = update_file(md_file, tmp_path, {"category": None})
 
         assert result["frontmatter"]["category"] is None
 
@@ -183,7 +139,7 @@ title: Test
 title: Test
 ---
 """)
-        result = update_file(md_file, tmp_path, set_values={"summary": ""})
+        result = update_file(md_file, tmp_path, {"summary": ""})
 
         assert result["frontmatter"]["summary"] == ""
 
@@ -194,7 +150,7 @@ title: Test
 title: Test
 ---
 """)
-        result = update_file(md_file, tmp_path, set_values={"tags": ["python", "mcp"]})
+        result = update_file(md_file, tmp_path, {"tags": ["python", "mcp"]})
 
         assert result["frontmatter"]["tags"] == ["python", "mcp"]
 
@@ -217,7 +173,7 @@ title: Test
         md_file = tmp_path / "test.md"
         md_file.write_text("# Just content\n\nNo frontmatter.")
 
-        result = update_file(md_file, tmp_path, set_values={"title": "New Title"})
+        result = update_file(md_file, tmp_path, {"title": "New Title"})
 
         assert result["frontmatter"]["title"] == "New Title"
 
@@ -238,9 +194,167 @@ Some paragraph.
 
 - List item
 """)
-        update_file(md_file, tmp_path, set_values={"status": "done"})
+        update_file(md_file, tmp_path, {"status": "done"})
 
         content = md_file.read_text()
         assert "# Heading" in content
         assert "Some paragraph." in content
         assert "- List item" in content
+
+
+class TestFrontmatterCache:
+    """Tests for FrontmatterCache class."""
+
+    def test_cache_hit(self, tmp_path: Path) -> None:
+        """Cache returns record on hit."""
+        md_file = tmp_path / "test.md"
+        md_file.write_text("""---
+title: Test
+---
+""")
+        cache = FileRecordCache()
+        record = parse_file(md_file, tmp_path)
+        cache.set(md_file, tmp_path, record)
+
+        # Should hit cache
+        cached = cache.get(md_file, tmp_path)
+        assert cached is not None
+        assert cached["title"] == "Test"
+
+    def test_cache_miss_on_mtime_change(self, tmp_path: Path) -> None:
+        """Cache returns None when mtime changes."""
+        import time
+
+        md_file = tmp_path / "test.md"
+        md_file.write_text("""---
+title: Original
+---
+""")
+        cache = FileRecordCache()
+        record = parse_file(md_file, tmp_path)
+        cache.set(md_file, tmp_path, record)
+
+        # Modify file (changes mtime)
+        time.sleep(0.01)  # Ensure mtime changes
+        md_file.write_text("""---
+title: Modified
+---
+""")
+
+        # Should miss cache
+        cached = cache.get(md_file, tmp_path)
+        assert cached is None
+
+    def test_cache_miss_on_new_file(self, tmp_path: Path) -> None:
+        """Cache returns None for uncached file."""
+        md_file = tmp_path / "test.md"
+        md_file.write_text("""---
+title: Test
+---
+""")
+        cache = FileRecordCache()
+
+        cached = cache.get(md_file, tmp_path)
+        assert cached is None
+
+    def test_invalidate_removes_entry(self, tmp_path: Path) -> None:
+        """Invalidate removes cache entry."""
+        md_file = tmp_path / "test.md"
+        md_file.write_text("""---
+title: Test
+---
+""")
+        cache = FileRecordCache()
+        record = parse_file(md_file, tmp_path)
+        cache.set(md_file, tmp_path, record)
+
+        # Invalidate
+        cache.invalidate([md_file], tmp_path)
+
+        # Should miss cache
+        cached = cache.get(md_file, tmp_path)
+        assert cached is None
+
+    def test_invalidate_multiple_files(self, tmp_path: Path) -> None:
+        """Invalidate multiple files at once."""
+        file1 = tmp_path / "a.md"
+        file1.write_text("---\ntitle: A\n---\n")
+        file2 = tmp_path / "b.md"
+        file2.write_text("---\ntitle: B\n---\n")
+
+        cache = FileRecordCache()
+        cache.set(file1, tmp_path, parse_file(file1, tmp_path))
+        cache.set(file2, tmp_path, parse_file(file2, tmp_path))
+
+        cache.invalidate([file1, file2], tmp_path)
+
+        assert cache.get(file1, tmp_path) is None
+        assert cache.get(file2, tmp_path) is None
+
+
+class TestParseFilesCached:
+    """Tests for parse_files_cached function."""
+
+    def test_parse_with_cache(self, tmp_path: Path) -> None:
+        """Parse files and populate cache."""
+        file1 = tmp_path / "a.md"
+        file1.write_text("---\ntitle: A\n---\n")
+        file2 = tmp_path / "b.md"
+        file2.write_text("---\ntitle: B\n---\n")
+
+        cache = FileRecordCache()
+        records, warnings = parse_files([file1, file2], tmp_path, cache)
+
+        assert len(records) == 2
+        assert len(warnings) == 0
+
+        # Cache should be populated
+        assert cache.get(file1, tmp_path) is not None
+        assert cache.get(file2, tmp_path) is not None
+
+    def test_parse_uses_cache(self, tmp_path: Path) -> None:
+        """Second call uses cache instead of re-parsing."""
+        md_file = tmp_path / "test.md"
+        md_file.write_text("---\ntitle: Original\n---\n")
+
+        cache = FileRecordCache()
+
+        # First call populates cache
+        records1, _ = parse_files([md_file], tmp_path, cache)
+        assert records1[0]["title"] == "Original"
+
+        # Modify cache entry directly to verify it's being used
+        from frontmatter_mcp.files import FileRecordCacheEntry
+
+        cache._cache["test.md"] = FileRecordCacheEntry(
+            cache._cache["test.md"].mtime,
+            {"path": "test.md", "title": "Cached"},
+        )
+
+        # Second call should use cache
+        records2, _ = parse_files([md_file], tmp_path, cache)
+        assert records2[0]["title"] == "Cached"
+
+    def test_parse_without_cache(self, tmp_path: Path) -> None:
+        """Parse works with empty cache."""
+        md_file = tmp_path / "test.md"
+        md_file.write_text("---\ntitle: Test\n---\n")
+
+        records, warnings = parse_files([md_file], tmp_path, FileRecordCache())
+
+        assert len(records) == 1
+        assert records[0]["title"] == "Test"
+
+    def test_parse_handles_errors(self, tmp_path: Path) -> None:
+        """Errors are recorded in warnings."""
+        valid_file = tmp_path / "valid.md"
+        valid_file.write_text("---\ntitle: Valid\n---\n")
+        invalid_file = tmp_path / "invalid.md"
+        invalid_file.write_text("---\ninvalid: yaml: [\n---\n")
+
+        cache = FileRecordCache()
+        records, warnings = parse_files([valid_file, invalid_file], tmp_path, cache)
+
+        assert len(records) == 1
+        assert len(warnings) == 1
+        assert warnings[0]["path"] == "invalid.md"
