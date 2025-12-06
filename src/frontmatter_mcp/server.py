@@ -183,6 +183,32 @@ def index_status() -> Response:
 
 
 @mcp.tool(enabled=False)
+def index_wait(timeout: float = 60.0) -> Response:
+    """Wait for semantic search indexing to complete.
+
+    Blocks until indexing finishes or timeout is reached.
+    Use this instead of polling index_status when you need embeddings.
+
+    Args:
+        timeout: Maximum seconds to wait. Default 60.
+
+    Returns:
+        Dict with success (bool), state, and indexed_count.
+        - success=true: Indexing completed, semantic search is ready
+        - success=false: Timeout reached, indexing still in progress
+    """
+    assert _semantic_ctx is not None
+    completed = _semantic_ctx.indexer.wait(timeout=timeout)
+    return _build_response(
+        {
+            "success": completed,
+            "state": _semantic_ctx.indexer.state.value,
+            "indexed_count": _semantic_ctx.indexer.indexed_count,
+        }
+    )
+
+
+@mcp.tool(enabled=False)
 def index_refresh() -> Response:
     """Refresh the semantic search index (differential update).
 
@@ -570,6 +596,7 @@ def main() -> None:
         _semantic_ctx = get_semantic_context(_settings)
         _semantic_ctx.indexer.start()
         index_status.enable()
+        index_wait.enable()
         index_refresh.enable()
 
     mcp.run()
