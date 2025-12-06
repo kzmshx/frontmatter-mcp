@@ -16,9 +16,7 @@ from frontmatter_mcp.semantic.context import SemanticContext
 FILE_COUNTS = [100, 500]
 
 
-def _create_mock_semantic_context(
-    paths: list[str], dim: int = 256
-) -> SemanticContext:
+def _create_mock_semantic_context(paths: list[str], dim: int = 256) -> SemanticContext:
     """Create a mock SemanticContext with random embeddings."""
     embeddings = {path: np.random.rand(dim).astype(np.float32) for path in paths}
 
