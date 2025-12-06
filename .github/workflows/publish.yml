@@ -37,8 +37,9 @@ jobs:
       - run: sleep 30
       - name: Test install from TestPyPI
         run: |
-          uv pip install --system --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ frontmatter-mcp==${VERSION}
-          uv pip show --system frontmatter-mcp
+          uv venv .venv
+          uv pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ frontmatter-mcp==${VERSION}
+          uv pip show frontmatter-mcp
 
   publish-pypi:
     needs: publish-testpypi
