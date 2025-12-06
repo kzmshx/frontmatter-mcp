@@ -37,6 +37,7 @@ packages = ["src/frontmatter_mcp"]
 
 [dependency-groups]
 dev = [
+    "mypy>=1.0.0",
     "numpy>=2.0.0",
     "protobuf>=3.0.0",
     "pytest>=8.0.0",
@@ -57,3 +58,12 @@ indent-style = "space"
 markers = [
   "slow: marks tests as slow (deselect with '-m \"not slow\"')",
 ]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src/frontmatter_mcp"]
+
+[[tool.mypy.overrides]]
+module = ["duckdb", "frontmatter", "pyarrow", "sentence_transformers"]
+ignore_missing_imports = true
