@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.4.0](https://github.com/kzmshx/frontmatter-mcp/compare/v0.3.0...v0.4.0) (2025-12-06)
+
+
+### Features
+
+* add index_wait tool for blocking wait on indexing completion ([#24](https://github.com/kzmshx/frontmatter-mcp/issues/24)) ([4ad03fd](https://github.com/kzmshx/frontmatter-mcp/commit/4ad03fd836129ab0276a85a567e5a5411d9137f4))
+
+
+### Bug Fixes
+
+* avoid DB lock in index_status by caching indexed count in memory ([#19](https://github.com/kzmshx/frontmatter-mcp/issues/19)) ([73f6e28](https://github.com/kzmshx/frontmatter-mcp/commit/73f6e28301faf4f2b66bd6793469994b2aacf839))
+
+
+### Documentation
+
+* add semantic search usage guide to query tool description ([#20](https://github.com/kzmshx/frontmatter-mcp/issues/20)) ([59e1ace](https://github.com/kzmshx/frontmatter-mcp/commit/59e1ace0ce66df39c769b11f3618d3fb93887755))
+
 ## [0.3.0](https://github.com/kzmshx/frontmatter-mcp/compare/v0.2.1...v0.3.0) (2025-12-06)
 
 
