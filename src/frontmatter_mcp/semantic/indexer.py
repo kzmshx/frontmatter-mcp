@@ -44,6 +44,7 @@ class EmbeddingIndexer:
         self._state = IndexerState.IDLE
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
+        self._indexed_count: int = 0
 
     @property
     def state(self) -> IndexerState:
@@ -53,8 +54,14 @@ class EmbeddingIndexer:
 
     @property
     def indexed_count(self) -> int:
-        """Get the number of indexed documents."""
-        return self._cache.count()
+        """Get the number of indexed documents.
+
+        Note: Returns 0 until the first indexing completes. This avoids
+        DB lock issues but means the count may not reflect cached embeddings
+        from previous sessions until indexing runs.
+        """
+        with self._lock:
+            return self._indexed_count
 
     def start(self) -> dict[str, Any]:
         """Start background indexing.
@@ -97,6 +104,7 @@ class EmbeddingIndexer:
         finally:
             with self._lock:
                 self._state = IndexerState.READY
+                self._indexed_count = self._cache.count()
 
     def _index_files(self, files: list[Path]) -> None:
         """Index the given files.
