@@ -4,6 +4,7 @@ import random
 import string
 from datetime import date, timedelta
 from pathlib import Path
+from typing import Callable
 
 import pytest
 
@@ -62,7 +63,9 @@ def generate_markdown(prop_count: int = 5) -> str:
 
 
 @pytest.fixture(scope="module")
-def benchmark_dir_factory(tmp_path_factory: pytest.TempPathFactory):
+def benchmark_dir_factory(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Callable[[int], Path]:
     """Factory fixture to create benchmark directories with synthetic files.
 
     Returns a function that creates directories with the specified number of files.
