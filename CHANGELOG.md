@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/kzmshx/frontmatter-mcp/compare/v0.4.0...v0.4.1) (2025-12-06)
+
+
+### Bug Fixes
+
+* **ci:** use venv instead of --system for TestPyPI install test ([#25](https://github.com/kzmshx/frontmatter-mcp/issues/25)) ([7ed62ab](https://github.com/kzmshx/frontmatter-mcp/commit/7ed62ab8787d478c0251eac0d66c885dce74113c))
+
 ## [0.4.0](https://github.com/kzmshx/frontmatter-mcp/compare/v0.3.0...v0.4.0) (2025-12-06)
 
 
