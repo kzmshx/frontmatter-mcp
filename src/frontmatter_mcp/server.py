@@ -7,7 +7,11 @@ from typing import Any
 import frontmatter
 from fastmcp import FastMCP
 
-from frontmatter_mcp.files import parse_files, update_file
+from frontmatter_mcp.files import (
+    FileRecordCache,
+    parse_files,
+    update_file,
+)
 from frontmatter_mcp.query import create_base_connection, execute_query
 from frontmatter_mcp.query_schema import create_base_schema
 from frontmatter_mcp.semantic import (
@@ -24,6 +28,7 @@ mcp = FastMCP("frontmatter-mcp")
 
 _settings: Settings | None = None
 _semantic_ctx: SemanticContext | None = None
+_file_record_cache: FileRecordCache = FileRecordCache()
 
 
 def _collect_files(base_dir: Path, glob_pattern: str) -> list[Path]:
@@ -94,7 +99,7 @@ def query_inspect(glob: str) -> Response:
     assert _settings is not None
 
     paths = _collect_files(_settings.base_dir, glob)
-    records, warnings = parse_files(paths, _settings.base_dir)
+    records, warnings = parse_files(paths, _settings.base_dir, _file_record_cache)
 
     # Create base schema with path and frontmatter columns
     schema = create_base_schema(records)
@@ -140,7 +145,7 @@ def query(glob: str, sql: str) -> Response:
     assert _settings is not None
 
     paths = _collect_files(_settings.base_dir, glob)
-    records, warnings = parse_files(paths, _settings.base_dir)
+    records, warnings = parse_files(paths, _settings.base_dir, _file_record_cache)
 
     # Create base connection with files table (path and frontmatter columns)
     conn = create_base_connection(records)
@@ -252,8 +257,9 @@ def update(
 
     base_dir = _settings.base_dir
     abs_path = _resolve_path(base_dir, path)
+    result = update_file(abs_path, base_dir, set, unset)
 
-    return _build_response(update_file(abs_path, base_dir, set_values=set, unset=unset))
+    return _build_response(result)
 
 
 @mcp.tool()
@@ -294,8 +300,8 @@ def batch_update(
             continue
 
         try:
-            update_result = update_file(abs_path, base_dir, set_values=set, unset=unset)
-            updated_files.append(update_result["path"])
+            result = update_file(abs_path, base_dir, set, unset)
+            updated_files.append(result["path"])
         except Exception as e:
             warnings.append(f"Failed to update {rel_path}: {e}")
 
