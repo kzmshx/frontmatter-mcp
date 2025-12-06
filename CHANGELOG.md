@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/kzmshx/frontmatter-mcp/compare/v0.2.1...v0.3.0) (2025-12-06)
+
+
+### Features
+
+* add semantic search with local embedding model ([#16](https://github.com/kzmshx/frontmatter-mcp/issues/16)) ([4316479](https://github.com/kzmshx/frontmatter-mcp/commit/43164795c344992652d49fe20dce73cab7f1eff7))
+
 ## [0.2.1](https://github.com/kzmshx/frontmatter-mcp/compare/v0.2.0...v0.2.1) (2025-11-29)
 
 
