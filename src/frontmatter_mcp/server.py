@@ -126,14 +126,13 @@ def query(glob: str, sql: str) -> Response:
     Semantic search (when enabled and indexing is complete):
         - embedding: document embedding vector (NULL if not indexed)
         - embed('text'): converts text to embedding vector
-        - array_cosine_similarity(embedding, embed('query')): similarity score (0-1)
+        - array_cosine_similarity(a, b): similarity score (0-1)
 
         Example - find similar documents:
-            SELECT path, array_cosine_similarity(embedding, embed('search term')) as score
-            FROM files
-            WHERE embedding IS NOT NULL
-            ORDER BY score DESC
-            LIMIT 10
+            SELECT path,
+                   array_cosine_similarity(embedding, embed('search term')) as score
+            FROM files WHERE embedding IS NOT NULL
+            ORDER BY score DESC LIMIT 10
 
     Returns:
         Dict with results array, row_count, and columns.
