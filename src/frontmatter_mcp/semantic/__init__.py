@@ -9,9 +9,9 @@ from frontmatter_mcp.semantic.query import add_semantic_columns
 __all__ = [
     "EmbeddingCache",
     "EmbeddingIndexer",
-    "IndexerState",
     "EmbeddingModel",
+    "IndexerState",
     "SemanticContext",
-    "get_semantic_context",
     "add_semantic_columns",
+    "get_semantic_context",
 ]

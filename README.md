@@ -20,19 +20,14 @@ An MCP server for querying Markdown frontmatter with DuckDB SQL.
 
 ### With Semantic Search
 
-To enable semantic search, add the required dependencies and set the environment variable:
+To enable semantic search, use the `[semantic]` extras:
 
 ```json
 {
   "mcpServers": {
     "frontmatter": {
       "command": "uvx",
-      "args": [
-        "--with", "sentence-transformers",
-        "--with", "protobuf",
-        "--with", "sentencepiece",
-        "frontmatter-mcp"
-      ],
+      "args": ["--from", "frontmatter-mcp[semantic]", "frontmatter-mcp"],
       "env": {
         "FRONTMATTER_BASE_DIR": "/path/to/markdown/directory",
         "FRONTMATTER_ENABLE_SEMANTIC": "true"
@@ -83,14 +78,7 @@ Get schema information from frontmatter across files.
   "schema": {
     "date": { "type": "string", "count": 180, "nullable": true },
     "tags": { "type": "array", "count": 150, "nullable": true },
-    "embedding": {
-      "type": "FLOAT[256]",
-      "count": 186,
-      "nullable": false,
-      "description": "Document embedding vector for semantic search",
-      "functions": { "embed": "embed(text) -> FLOAT[256]" },
-      "example": "SELECT path, 1 - array_cosine_distance(embedding, embed('search query')) as score FROM files ORDER BY score DESC"
-    }
+    "embedding": { "type": "FLOAT[256]", "nullable": false }
   }
 }
 ```

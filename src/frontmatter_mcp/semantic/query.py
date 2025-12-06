@@ -1,13 +1,10 @@
 """Semantic search query support module."""
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, cast
+from typing import cast
 
 import duckdb
 
-if TYPE_CHECKING:
-    from frontmatter_mcp.semantic.context import SemanticContext
+from frontmatter_mcp.semantic.context import SemanticContext
 
 
 def add_semantic_columns(

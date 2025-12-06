@@ -1,13 +1,7 @@
 """Query schema extension for semantic search."""
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
-
 from frontmatter_mcp.query_schema import ColumnInfo, Schema
-
-if TYPE_CHECKING:
-    from frontmatter_mcp.semantic.context import SemanticContext
+from frontmatter_mcp.semantic.context import SemanticContext
 
 
 def add_semantic_schema(schema: Schema, ctx: SemanticContext) -> None:

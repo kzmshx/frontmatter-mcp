@@ -26,20 +26,22 @@ Directory structure:
 ```text
 src/frontmatter_mcp/
 ├── query.py              # Core query execution (no semantic imports)
+├── query_schema.py       # Schema creation for query_inspect
 ├── server.py             # Tool definitions
-├── context.py            # Singleton management for optional components
 ├── settings.py           # pydantic-settings configuration
 └── semantic/
     ├── __init__.py
     ├── model.py          # EmbeddingModel class
     ├── cache.py          # EmbeddingCache class
-    ├── indexer.py        # EmbeddingIndexer class
-    └── query.py          # SemanticContext, setup_semantic_search
+    ├── indexer.py        # EmbeddingIndexer class, IndexerState enum
+    ├── context.py        # SemanticContext, get_semantic_context
+    ├── query.py          # add_semantic_columns (DuckDB extension)
+    └── query_schema.py   # add_semantic_schema (schema extension)
 ```
 
 Key design patterns:
 
-1. **Callback injection**: `execute_query()` accepts `conn_setup: Callable` instead of `SemanticContext`, removing the import dependency
+1. **Schema extender pattern**: Core modules (`query.py`, `query_schema.py`) define base functionality, semantic modules extend them via callback functions (`add_semantic_columns`, `add_semantic_schema`)
 2. **Conditional tool registration**: `@mcp.tool(enabled=False)` with `.enable()` at runtime
 3. **Optional dependencies**: `sentence-transformers` in `[project.optional-dependencies]`, installed via `uvx --with`
 
