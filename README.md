@@ -9,7 +9,29 @@ An MCP server for querying Markdown frontmatter with DuckDB SQL.
   "mcpServers": {
     "frontmatter": {
       "command": "uvx",
-      "args": ["frontmatter-mcp", "--base-dir", "/path/to/markdown/directory"]
+      "args": ["frontmatter-mcp"],
+      "env": {
+        "FRONTMATTER_BASE_DIR": "/path/to/markdown/directory"
+      }
+    }
+  }
+}
+```
+
+### With Semantic Search
+
+To enable semantic search, use the `[semantic]` extras:
+
+```json
+{
+  "mcpServers": {
+    "frontmatter": {
+      "command": "uvx",
+      "args": ["--from", "frontmatter-mcp[semantic]", "frontmatter-mcp"],
+      "env": {
+        "FRONTMATTER_BASE_DIR": "/path/to/markdown/directory",
+        "FRONTMATTER_ENABLE_SEMANTIC": "true"
+      }
     }
   }
 }
@@ -47,6 +69,16 @@ Get schema information from frontmatter across files.
   "schema": {
     "date": { "type": "string", "count": 180, "nullable": true },
     "tags": { "type": "array", "count": 150, "nullable": true }
+  }
+}
+
+// Output (with semantic search ready)
+{
+  "file_count": 186,
+  "schema": {
+    "date": { "type": "string", "count": 180, "nullable": true },
+    "tags": { "type": "array", "count": 150, "nullable": true },
+    "embedding": { "type": "FLOAT[256]", "nullable": false }
   }
 }
 ```
@@ -124,12 +156,12 @@ Update frontmatter properties in multiple files.
 
 Add a value to an array property in multiple files.
 
-| Parameter          | Type   | Description                                |
-| ------------------ | ------ | ------------------------------------------ |
-| `glob`             | string | Glob pattern relative to base directory    |
-| `property`         | string | Name of the array property                 |
-| `value`            | any    | Value to add                               |
-| `allow_duplicates` | bool   | Allow duplicate values (default: false)    |
+| Parameter          | Type   | Description                             |
+| ------------------ | ------ | --------------------------------------- |
+| `glob`             | string | Glob pattern relative to base directory |
+| `property`         | string | Name of the array property              |
+| `value`            | any    | Value to add                            |
+| `allow_duplicates` | bool   | Allow duplicate values (default: false) |
 
 **Example:**
 
@@ -186,11 +218,11 @@ Replace a value in an array property in multiple files.
 
 Sort an array property in multiple files.
 
-| Parameter  | Type   | Description                             |
-| ---------- | ------ | --------------------------------------- |
-| `glob`     | string | Glob pattern relative to base directory |
-| `property` | string | Name of the array property              |
-| `reverse`  | bool   | Sort in descending order (default: false)|
+| Parameter  | Type   | Description                               |
+| ---------- | ------ | ----------------------------------------- |
+| `glob`     | string | Glob pattern relative to base directory   |
+| `property` | string | Name of the array property                |
+| `reverse`  | bool   | Sort in descending order (default: false) |
 
 **Example:**
 
@@ -200,6 +232,41 @@ Sort an array property in multiple files.
 
 // Output
 { "updated_count": 20, "updated_files": ["a.md", "b.md", ...] }
+```
+
+### index_status
+
+Get the status of the semantic search index.
+
+This tool is only available when `FRONTMATTER_ENABLE_SEMANTIC=true`.
+
+**Example:**
+
+```json
+// Output (not started)
+{ "state": "idle", "indexed_count": 0 }
+
+// Output (indexing in progress)
+{ "state": "indexing", "indexed_count": 150 }
+
+// Output (ready)
+{ "state": "ready", "indexed_count": 665 }
+```
+
+### index_refresh
+
+Refresh the semantic search index (differential update).
+
+This tool is only available when `FRONTMATTER_ENABLE_SEMANTIC=true`.
+
+**Example:**
+
+```json
+// Output
+{ "state": "indexing", "message": "Indexing started", "target_count": 665 }
+
+// Output (when already indexing)
+{ "state": "indexing", "message": "Indexing already in progress" }
 ```
 
 ## Technical Notes
@@ -226,6 +293,34 @@ WHERE tag = 'ai'
 ### Templater Expression Support
 
 Files containing Obsidian Templater expressions (e.g., `<% tp.date.now("YYYY-MM-DD") %>`) are handled gracefully. These expressions are treated as strings and naturally excluded by date filtering.
+
+### Semantic Search
+
+When semantic search is enabled, you can use the `embed()` function and `embedding` column in SQL queries. After running `index_refresh`, the markdown body content is indexed as vectors.
+
+```sql
+-- Find semantically similar documents
+SELECT path, 1 - array_cosine_distance(embedding, embed('feeling better')) as score
+FROM files
+ORDER BY score DESC
+LIMIT 10
+
+-- Combine with frontmatter filters
+SELECT path, date, 1 - array_cosine_distance(embedding, embed('motivation')) as score
+FROM files
+WHERE date >= '2025-11-01'
+ORDER BY score DESC
+LIMIT 10
+```
+
+Environment variables:
+
+| Variable                    | Default                               | Description                    |
+| --------------------------- | ------------------------------------- | ------------------------------ |
+| FRONTMATTER_BASE_DIR        | (required)                            | Base directory for files       |
+| FRONTMATTER_ENABLE_SEMANTIC | false                                 | Enable semantic search         |
+| FRONTMATTER_EMBEDDING_MODEL | cl-nagoya/ruri-v3-30m                 | Embedding model name           |
+| FRONTMATTER_CACHE_DIR       | FRONTMATTER_BASE_DIR/.frontmatter-mcp | Cache directory for embeddings |
 
 ## License
 

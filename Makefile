@@ -13,5 +13,13 @@ fix: ## Auto-fix lint issues
 	uv run ruff format src tests
 
 .PHONY: test
-test: ## Run tests
+test: ## Run all tests
 	uv run pytest tests -v
+
+.PHONY: test-fast
+test-fast: ## Run tests excluding slow tests
+	uv run pytest tests -v -m "not slow"
+
+.PHONY: typecheck
+typecheck: ## Run type checker
+	uv run mypy src
