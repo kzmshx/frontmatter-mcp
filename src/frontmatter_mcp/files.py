@@ -25,7 +25,10 @@ class FileRecordCache:
     def get(self, path: Path, base_dir: Path) -> FileRecord | None:
         """Return cached record if valid, None otherwise."""
         rel_path = str(path.relative_to(base_dir))
-        mtime = path.stat().st_mtime
+        try:
+            mtime = path.stat().st_mtime
+        except FileNotFoundError:
+            return None
         if (entry := self._cache.get(rel_path)) and entry.mtime == mtime:
             return entry.record
         return None
@@ -33,7 +36,10 @@ class FileRecordCache:
     def set(self, path: Path, base_dir: Path, record: FileRecord) -> None:
         """Add or update cache entry."""
         rel_path = str(path.relative_to(base_dir))
-        mtime = path.stat().st_mtime
+        try:
+            mtime = path.stat().st_mtime
+        except FileNotFoundError:
+            return
         self._cache[rel_path] = FileRecordCacheEntry(mtime, record)
 
     def invalidate(self, paths: list[Path], base_dir: Path) -> None:
