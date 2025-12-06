@@ -173,18 +173,13 @@ def index_status() -> Response:
     """Get the status of the semantic search index.
 
     Returns:
-        Dict with state ("idle", "indexing", "ready") and indexed_count.
+        Dict with state ("idle", "indexing", "ready").
         - idle: Indexing has never been started
-        - indexing: Indexing is in progress (indexed_count shows progress)
+        - indexing: Indexing is in progress
         - ready: Indexing completed, embed() and embedding column available
     """
     assert _semantic_ctx is not None
-    return _build_response(
-        {
-            "state": _semantic_ctx.indexer.state.value,
-            "indexed_count": _semantic_ctx.indexer.indexed_count,
-        }
-    )
+    return _build_response({"state": _semantic_ctx.indexer.state.value})
 
 
 @mcp.tool(enabled=False)
@@ -198,7 +193,7 @@ def index_wait(timeout: float = 60.0) -> Response:
         timeout: Maximum seconds to wait. Default 60.
 
     Returns:
-        Dict with success (bool), state, and indexed_count.
+        Dict with success (bool) and state.
         - success=true: Indexing completed or idle (not started)
         - success=false: Timeout reached while indexing in progress
     """
@@ -208,7 +203,6 @@ def index_wait(timeout: float = 60.0) -> Response:
         {
             "success": completed,
             "state": _semantic_ctx.indexer.state.value,
-            "indexed_count": _semantic_ctx.indexer.indexed_count,
         }
     )
 

@@ -57,7 +57,6 @@ class TestEmbeddingIndexer:
         """EmbeddingIndexer starts in IDLE state."""
         indexer = EmbeddingIndexer(cache, mock_model, lambda: [], base_dir)
         assert indexer.state == IndexerState.IDLE
-        assert indexer.indexed_count == 0
 
     def test_start_indexing(
         self, cache: EmbeddingCache, mock_model: MagicMock, base_dir: Path
@@ -80,7 +79,7 @@ class TestEmbeddingIndexer:
         # Wait for completion
         indexer.wait(timeout=5.0)
         assert indexer.state == IndexerState.READY
-        assert indexer.indexed_count == 2
+        assert cache.count() == 2
 
     def test_duplicate_start(
         self, cache: EmbeddingCache, mock_model: MagicMock, base_dir: Path
@@ -150,7 +149,7 @@ class TestEmbeddingIndexer:
         # First indexing
         indexer.start()
         indexer.wait(timeout=5.0)
-        assert indexer.indexed_count == 2
+        assert cache.count() == 2
 
         # Delete one file
         file_b.unlink()
@@ -160,7 +159,7 @@ class TestEmbeddingIndexer:
         indexer2.start()
         indexer2.wait(timeout=5.0)
 
-        assert indexer2.indexed_count == 1
+        assert cache.count() == 1
         assert cache.get("b.md") is None
 
     def test_empty_content_skipped(
@@ -177,7 +176,7 @@ class TestEmbeddingIndexer:
         indexer.wait(timeout=5.0)
 
         # Only file with content should be indexed
-        assert indexer.indexed_count == 1
+        assert cache.count() == 1
 
     def test_wait_returns_true_on_completion(
         self, cache: EmbeddingCache, mock_model: MagicMock, base_dir: Path
@@ -215,6 +214,6 @@ class TestEmbeddingIndexer:
         indexer.start()
         indexer.wait(timeout=5.0)
 
-        assert indexer.indexed_count == 2
+        assert cache.count() == 2
         assert cache.get("root.md") is not None
         assert cache.get("sub/nested.md") is not None

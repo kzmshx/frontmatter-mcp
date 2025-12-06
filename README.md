@@ -244,13 +244,13 @@ This tool is only available when `FRONTMATTER_ENABLE_SEMANTIC=true`.
 
 ```json
 // Output (not started)
-{ "state": "idle", "indexed_count": 0 }
+{ "state": "idle" }
 
 // Output (indexing in progress)
-{ "state": "indexing", "indexed_count": 150 }
+{ "state": "indexing" }
 
 // Output (ready)
-{ "state": "ready", "indexed_count": 665 }
+{ "state": "ready" }
 ```
 
 ### index_refresh
