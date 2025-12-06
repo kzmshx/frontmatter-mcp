@@ -3,6 +3,7 @@
 from typing import cast
 
 import duckdb
+import pyarrow as pa
 
 from frontmatter_mcp.semantic.context import SemanticContext
 
@@ -40,25 +41,24 @@ def add_semantic_columns(
     # Add embedding column to files table
     conn.execute(f"ALTER TABLE files ADD COLUMN embedding FLOAT[{dim}]")
 
-    # Create temporary embeddings table for UPDATE
-    conn.execute(f"""
-        CREATE TEMP TABLE embeddings (
-            path TEXT PRIMARY KEY,
-            vector FLOAT[{dim}]
-        )
-    """)
+    # Get embeddings from cache and bulk insert via PyArrow
+    embeddings = ctx.cache.get_all()
+    if embeddings:
+        paths = list(embeddings.keys())
+        vectors = [v.tolist() for v in embeddings.values()]
 
-    # Insert embeddings from cache
-    for path, vector in ctx.cache.get_all().items():
-        conn.execute(
-            "INSERT INTO embeddings (path, vector) VALUES (?, ?)",
-            [path, vector.tolist()],
-        )
+        arrow_table = pa.table({"path": paths, "vector": vectors})
+        conn.register("arrow_embeddings", arrow_table)
+        conn.execute(f"""
+            CREATE TEMP TABLE embeddings AS
+            SELECT path, vector::FLOAT[{dim}] as vector FROM arrow_embeddings
+        """)
+        conn.unregister("arrow_embeddings")
 
-    # Update files table with embeddings
-    conn.execute("""
-        UPDATE files
-        SET embedding = e.vector
-        FROM embeddings e
-        WHERE files.path = e.path
-    """)
+        # Update files table with embeddings
+        conn.execute("""
+            UPDATE files
+            SET embedding = e.vector
+            FROM embeddings e
+            WHERE files.path = e.path
+        """)
