@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.2](https://github.com/kzmshx/frontmatter-mcp/compare/v0.4.1...v0.4.2) (2025-12-06)
+
+
+### Bug Fixes
+
+* trigger release for publish workflow fix ([#28](https://github.com/kzmshx/frontmatter-mcp/issues/28)) ([b9dcb70](https://github.com/kzmshx/frontmatter-mcp/commit/b9dcb709bf91be64d085711817b33ee817e73da7))
+
 ## [0.4.1](https://github.com/kzmshx/frontmatter-mcp/compare/v0.4.0...v0.4.1) (2025-12-06)
 
 
