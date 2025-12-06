@@ -267,8 +267,8 @@ class TestSemanticSearch:
         assert "query_vec" in result["columns"]
         mock_model.encode.assert_called_with("test query")
 
-    def test_cosine_distance_calculation(self) -> None:
-        """array_cosine_distance works with embeddings."""
+    def test_cosine_similarity_calculation(self) -> None:
+        """array_cosine_similarity works with embeddings."""
         # Create embeddings where a.md is more similar to query than b.md
         query_vec = np.array([1.0, 0.0, 0.0] + [0.0] * 253, dtype=np.float32)
         vec_a = np.array([0.9, 0.1, 0.0] + [0.0] * 253, dtype=np.float32)  # Similar
@@ -291,7 +291,7 @@ class TestSemanticSearch:
         result = execute_query(
             conn,
             """
-            SELECT path, 1 - array_cosine_distance(embedding, embed('query')) as score
+            SELECT path, array_cosine_similarity(embedding, embed('query')) as score
             FROM files
             ORDER BY score DESC
             """,

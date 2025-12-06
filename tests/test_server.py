@@ -509,7 +509,7 @@ class TestSemanticSearchTools:
             server_module.query,
             "**/*.md",
             """SELECT path,
-               1 - array_cosine_distance(embedding, embed('test')) as score
+               array_cosine_similarity(embedding, embed('test')) as score
                FROM files
                ORDER BY score DESC
                LIMIT 2""",
