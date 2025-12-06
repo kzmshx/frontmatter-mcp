@@ -41,6 +41,7 @@ dev = [
     "numpy>=2.0.0",
     "protobuf>=3.0.0",
     "pytest>=8.0.0",
+    "pytest-benchmark>=5.0.0",
     "pytest-github-actions-annotate-failures>=0.2.0",
     "ruff>=0.14.0",
     "sentence-transformers>=2.0.0",
@@ -55,6 +56,8 @@ quote-style = "double"
 indent-style = "space"
 
 [tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--ignore=tests/benchmarks"
 markers = [
   "slow: marks tests as slow (deselect with '-m \"not slow\"')",
 ]
