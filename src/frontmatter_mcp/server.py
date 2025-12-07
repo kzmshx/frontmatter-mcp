@@ -586,6 +586,79 @@ def batch_array_sort(
     return _build_batch_response(updated_files, warnings)
 
 
+@mcp.tool()
+def batch_array_unique(
+    glob: str,
+    property: str,
+) -> Response:
+    """Remove duplicate values from an array property in multiple files.
+
+    Args:
+        glob: Glob pattern relative to base directory (e.g. "atoms/**/*.md").
+        property: Name of the array property.
+
+    Returns:
+        Dict with updated_count, updated_files, and warnings.
+
+    Notes:
+        - Preserves the order of first occurrence.
+        - If property doesn't exist, file is skipped.
+        - If array is empty or has single element, file is skipped.
+        - If array has no duplicates, file is skipped.
+        - If property is not an array, file is skipped with a warning.
+        - Files are only included in updated_files if actually modified.
+    """
+    assert _settings is not None
+
+    base_dir = _settings.base_dir
+    paths = _collect_files(base_dir, glob)
+
+    updated_files: list[str] = []
+    warnings: list[str] = []
+
+    for file_path in paths:
+        rel_path = str(file_path.relative_to(base_dir))
+        try:
+            abs_path = _resolve_path(base_dir, rel_path)
+        except (ValueError, FileNotFoundError) as e:
+            warnings.append(str(e))
+            continue
+
+        try:
+            post = frontmatter.load(abs_path)
+            current = post.get(property)
+
+            # Property doesn't exist: skip
+            if current is None:
+                continue
+
+            # Property is not an array: skip with warning
+            if not isinstance(current, list):
+                warnings.append(f"Skipped {rel_path}: '{property}' is not an array")
+                continue
+
+            # Empty array or single element: skip (no duplicates possible)
+            if len(current) <= 1:
+                continue
+
+            # Remove duplicates while preserving order
+            unique = list(dict.fromkeys(current))
+
+            # No duplicates: skip
+            if len(unique) == len(current):
+                continue
+
+            # Update
+            post[property] = unique
+            frontmatter.dump(post, abs_path)
+            updated_files.append(rel_path)
+
+        except Exception as e:
+            warnings.append(f"Failed to update {rel_path}: {e}")
+
+    return _build_batch_response(updated_files, warnings)
+
+
 def main() -> None:
     """Entry point for the MCP server."""
     global _settings, _semantic_ctx

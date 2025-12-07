@@ -436,6 +436,63 @@ class TestBatchArraySort:
         assert "warnings" in result
 
 
+class TestBatchArrayUnique:
+    """Tests for batch_array_unique tool."""
+
+    def test_remove_duplicates(self, temp_base_dir: Path) -> None:
+        """Remove duplicate values from array."""
+        (temp_base_dir / "dup.md").write_text("---\ntags: [a, b, a, c, b]\n---\n# Dup")
+
+        result = _call(server_module.batch_array_unique, "dup.md", "tags")
+        assert result["updated_count"] == 1
+        assert "dup.md" in result["updated_files"]
+
+        post = frontmatter.load(temp_base_dir / "dup.md")
+        assert post["tags"] == ["a", "b", "c"]
+
+    def test_preserve_order(self, temp_base_dir: Path) -> None:
+        """Preserve first occurrence order when removing duplicates."""
+        content = "---\ntags: [z, a, z, m, a]\n---\n# Order"
+        (temp_base_dir / "order.md").write_text(content)
+
+        result = _call(server_module.batch_array_unique, "order.md", "tags")
+        assert result["updated_count"] == 1
+
+        post = frontmatter.load(temp_base_dir / "order.md")
+        assert post["tags"] == ["z", "a", "m"]
+
+    def test_skip_if_no_duplicates(self, temp_base_dir: Path) -> None:
+        """Skip files where array has no duplicates."""
+        result = _call(server_module.batch_array_unique, "a.md", "tags")
+        # a.md has [python, mcp] - no duplicates
+        assert result["updated_count"] == 0
+
+    def test_skip_empty_array(self, temp_base_dir: Path) -> None:
+        """Skip files with empty array."""
+        (temp_base_dir / "empty.md").write_text("---\ntags: []\n---\n# Empty")
+
+        result = _call(server_module.batch_array_unique, "empty.md", "tags")
+        assert result["updated_count"] == 0
+
+    def test_skip_single_element(self, temp_base_dir: Path) -> None:
+        """Skip files with single element array."""
+        result = _call(server_module.batch_array_unique, "b.md", "tags")
+        # b.md has [duckdb] - single element
+        assert result["updated_count"] == 0
+
+    def test_skip_if_property_not_exists(self, temp_base_dir: Path) -> None:
+        """Skip files where property doesn't exist."""
+        result = _call(server_module.batch_array_unique, "*.md", "categories")
+        assert result["updated_count"] == 0
+        assert "warnings" not in result
+
+    def test_skip_non_array_property(self, temp_base_dir: Path) -> None:
+        """Skip and warn when property is not an array."""
+        result = _call(server_module.batch_array_unique, "*.md", "date")
+        assert result["updated_count"] == 0
+        assert "warnings" in result
+
+
 class TestSemanticSearchTools:
     """Tests for semantic search tools."""
 
