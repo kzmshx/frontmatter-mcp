@@ -1,33 +1,33 @@
 # SETUP
 
-## 開発環境構築
+## Development Environment
 
-### 依存関係のインストール
+### Install Dependencies
 
 ```bash
 uv sync
 ```
 
-### Serena MCP のセットアップ
+### Serena MCP Setup
 
-Serena はコード解析用の MCP サーバー。プロジェクト設定は `.serena/` に含まれている。
+Serena is an MCP server for code analysis. Project settings are in `.serena/`.
 
-プロジェクトルートで以下を実行:
+Run in project root:
 
 ```bash
 claude mcp add serena -s local -- uvx --from git+https://github.com/oraios/serena serena start-mcp-server --context ide-assistant --project $(pwd)
 ```
 
-## コマンド一覧
+## Commands
 
-| コマンド    | 説明                 |
-| ----------- | -------------------- |
-| `make lint` | リンター実行         |
-| `make fix`  | リント問題を自動修正 |
-| `make test` | テスト実行           |
-| `make help` | コマンド一覧表示     |
+| Command     | Description              |
+| ----------- | ------------------------ |
+| `make lint` | Run linter               |
+| `make fix`  | Auto-fix lint issues     |
+| `make test` | Run tests                |
+| `make help` | Show available commands  |
 
-## MCP サーバーの実行
+## Running the MCP Server
 
 ```bash
 uv run frontmatter-mcp --base-dir /path/to/markdown

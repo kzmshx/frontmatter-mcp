@@ -1,90 +1,90 @@
 # CLAUDE.md
 
-## Conventional Commits / ブランチ命名
+## Conventional Commits / Branch Naming
 
-| type       | 用途                                                 |
-| ---------- | ---------------------------------------------------- |
-| `feat`     | 新機能                                               |
-| `fix`      | バグ修正                                             |
-| `docs`     | ドキュメントのみ                                     |
-| `style`    | コードの意味に影響しない変更（空白、フォーマット等） |
-| `refactor` | バグ修正でも機能追加でもないコード変更               |
-| `test`     | テストの追加・修正                                   |
-| `chore`    | ビルドプロセスやツールの変更                         |
+| type       | purpose                                            |
+| ---------- | -------------------------------------------------- |
+| `feat`     | New feature                                        |
+| `fix`      | Bug fix                                            |
+| `docs`     | Documentation only                                 |
+| `style`    | Changes that don't affect code meaning (whitespace, formatting) |
+| `refactor` | Code change that is neither a fix nor a feature   |
+| `test`     | Adding or modifying tests                          |
+| `chore`    | Build process or tooling changes                   |
 
-ブランチ名: `{type}/{description}` (例: `feat/rename-tools`, `fix/json-encoding`)
+Branch name: `{type}/{description}` (e.g., `feat/rename-tools`, `fix/json-encoding`)
 
-## 開発ワークフロー
+## Development Workflow
 
-1. ブランチを作成 (`{type}/{description}`)
-2. `docs/workspace/{branch}/PLAN.md` を作成
-3. ユーザーと PLAN.md の内容を確認・吟味してから実装開始
-4. 実装
-5. 作業一段落ごとに `NOTES_{YYYYMMDD_HHMMSS}.md` を作成
-6. PR 作成・マージ
+1. Create branch (`{type}/{description}`)
+2. Create `docs/workspace/{branch}/PLAN.md`
+3. Review and refine PLAN.md with user before implementation
+4. Implement
+5. Create `NOTES_{YYYYMMDD_HHMMSS}.md` at each milestone
+6. Create PR and merge
 
-## PR レビュー対応
+## PR Review Handling
 
-| 操作             | コマンド                                                                                    |
-| ---------------- | ------------------------------------------------------------------------------------------- |
-| CI 状態確認      | `gh pr checks {n}`                                                                          |
-| コメント取得     | `gh api repos/{owner}/{repo}/pulls/{n}/comments`                                            |
-| コメントへの返信 | `gh api repos/{owner}/{repo}/pulls/{n}/comments/{comment_id}/replies -X POST -f body="..."` |
+| Operation      | Command                                                                                     |
+| -------------- | ------------------------------------------------------------------------------------------- |
+| Check CI       | `gh pr checks {n}`                                                                          |
+| Get comments   | `gh api repos/{owner}/{repo}/pulls/{n}/comments`                                            |
+| Reply          | `gh api repos/{owner}/{repo}/pulls/{n}/comments/{comment_id}/replies -X POST -f body="..."` |
 
-修正後はコミットハッシュ付きでコメントに返信する。
+Reply to comments with commit hash after fixes.
 
-## ドキュメント構成
+## Documentation Structure
 
 ### docs/workspace/{branch}/
 
-ブランチごとの作業ドキュメント。`.gitignore` で除外されている。
+Per-branch working documents. Excluded by `.gitignore`.
 
-構成:
+Structure:
 
-- `PLAN.md`: 機能仕様と実装タスク
-- `NOTES_{YYYYMMDD_HHMMSS}.md`: 作業ログ（発見、問題、解決策）。作業一段落ごとに作成
+- `PLAN.md`: Feature specification and implementation tasks
+- `NOTES_{YYYYMMDD_HHMMSS}.md`: Work log (findings, issues, solutions). Created at each milestone
 
 ### docs/adr/
 
-`adr` CLI（adr-tools）で管理する。Git 管理対象。
+Managed with `adr` CLI (adr-tools). Git tracked.
 
-- 新規作成: `adr new <タイトル>`
-- 一覧表示: `adr list`
-- 既存 ADR の置換: `adr new -s <番号> <タイトル>`
+- Create: `adr new <title>`
+- List: `adr list`
+- Supersede: `adr new -s <number> <title>`
 
-## ドキュメント作成ルール
+## Documentation Rules
 
-### 共通ルール
+### Common Rules
 
-- 絵文字使用禁止
-- 区切り線 (`---`) 使用禁止
+- No emojis
+- No horizontal rules (`---`)
 
-### 共通記述スタイル
+### Common Style
 
-- 簡潔に事実を記載
-- 不要な装飾や冗長な説明を避ける（可読性を重視しリストやテーブルは使って良い）
-- コードや設定は具体例を示す
+- State facts concisely
+- Avoid unnecessary decoration or verbose explanations (lists and tables are fine for readability)
+- Show concrete examples for code and config
 
-### セキュリティルール（重要）
+### Security Rules (Important)
 
-`docs/` 以下のドキュメントは Git 管理されるため、以下の情報は記載禁止:
+Documents under `docs/` are Git tracked, so the following are prohibited:
 
-- 秘密鍵、トークン、パスワード
-- API キー、認証情報
-- 個人を特定可能な情報（氏名、メールアドレス、ユーザー名）
-- ローカル環境固有のパス（`/Users/username/` など）
-- プロジェクト ID やリソース名は記載可（例: `exp-batch-predictions`）
-- 具体的な設定値が必要な場合は `.env.example` などのテンプレートファイルを参照する
-- ローカル環境固有の情報は `CLAUDE.local.md` に記載する
+- Private keys, tokens, passwords
+- API keys, credentials
+- Personally identifiable information (names, emails, usernames)
+- Local environment paths (e.g., `/Users/username/`)
+- Project IDs and resource names are OK (e.g., `exp-batch-predictions`)
+- For specific config values, reference template files like `.env.example`
+- Local environment info should go in `CLAUDE.local.md`
 
-### docs/workspace/{branch}/PLAN.md ルール
+### docs/workspace/{branch}/PLAN.md Rules
 
-- h1 見出しは `# PLAN` とする
-- h2、h3、h4 は使用してよい（ただし過度な階層化は避ける）
+- h1 heading should be `# PLAN`
+- h2, h3, h4 are allowed (avoid excessive nesting)
 
-### docs/workspace/{branch}/NOTES_{YYYYMMDD_HHMMSS}.md ルール
+### docs/workspace/{branch}/NOTES_{YYYYMMDD_HHMMSS}.md Rules
 
-- ファイル名の時刻は `date +%Y%m%d_%H%M%S` の出力をそのまま使用（加工禁止）
-- h1 見出しはファイル名と同じにする（例: `# NOTES_20251129_094523`）
-- h3 以下は使わず、h2 見出し直下に要点を簡潔に記載
-- 参照リンクは各見出し内に記載
+- Filename timestamp should use `date +%Y%m%d_%H%M%S` output directly (no modification)
+- h1 heading should match filename (e.g., `# NOTES_20251129_094523`)
+- Use only h2 headings with concise points directly below (no h3 or deeper)
+- Include reference links within each section
