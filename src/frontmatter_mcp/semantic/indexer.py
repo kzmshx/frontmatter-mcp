@@ -90,6 +90,7 @@ class EmbeddingIndexer:
         try:
             self._index_files(files)
         finally:
+            self._cache.close()
             with self._lock:
                 self._state = IndexerState.READY
 

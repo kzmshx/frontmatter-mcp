@@ -217,3 +217,23 @@ class TestEmbeddingIndexer:
         assert cache.count() == 2
         assert cache.get("root.md") is not None
         assert cache.get("sub/nested.md") is not None
+
+    def test_cache_connection_closed_after_indexing(
+        self, cache: EmbeddingCache, mock_model: MagicMock, base_dir: Path
+    ) -> None:
+        """Cache connection is closed after indexing completes.
+
+        This prevents DuckDB file lock conflicts when query tries to access
+        the cache after indexing is done.
+        """
+        self._create_md_file(base_dir, "a.md", "Content A")
+
+        files = list(base_dir.glob("*.md"))
+        indexer = EmbeddingIndexer(cache, mock_model, lambda: files, base_dir)
+
+        indexer.start()
+        indexer.wait(timeout=5.0)
+
+        assert indexer.state == IndexerState.READY
+        # Connection should be closed after indexing
+        assert cache._conn is None
