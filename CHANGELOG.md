@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/kzmshx/frontmatter-mcp/compare/v0.4.4...v0.5.0) (2025-12-07)
+
+
+### Features
+
+* add batch_array_unique tool to remove duplicates from arrays ([#37](https://github.com/kzmshx/frontmatter-mcp/issues/37)) ([b336c34](https://github.com/kzmshx/frontmatter-mcp/commit/b336c346a4fbb2e0623f472913a47e6948fb7243))
+
 ## [0.4.4](https://github.com/kzmshx/frontmatter-mcp/compare/v0.4.3...v0.4.4) (2025-12-07)
 
 
