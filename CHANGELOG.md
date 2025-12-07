@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.4](https://github.com/kzmshx/frontmatter-mcp/compare/v0.4.3...v0.4.4) (2025-12-07)
+
+
+### Bug Fixes
+
+* close cache connection after indexing to prevent DuckDB lock conflicts ([#35](https://github.com/kzmshx/frontmatter-mcp/issues/35)) ([26c68bc](https://github.com/kzmshx/frontmatter-mcp/commit/26c68bc86f92bec1e58cf96210e8dcfff7d726db))
+
 ## [0.4.3](https://github.com/kzmshx/frontmatter-mcp/compare/v0.4.2...v0.4.3) (2025-12-06)
 
 
