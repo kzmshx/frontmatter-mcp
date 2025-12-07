@@ -234,6 +234,25 @@ Sort an array property in multiple files.
 { "updated_count": 20, "updated_files": ["a.md", "b.md", ...] }
 ```
 
+### batch_array_unique
+
+Remove duplicate values from an array property in multiple files.
+
+| Parameter  | Type   | Description                             |
+| ---------- | ------ | --------------------------------------- |
+| `glob`     | string | Glob pattern relative to base directory |
+| `property` | string | Name of the array property              |
+
+**Example:**
+
+```json
+// Input
+{ "glob": "**/*.md", "property": "tags" }
+
+// Output
+{ "updated_count": 5, "updated_files": ["a.md", "b.md", ...] }
+```
+
 ### index_status
 
 Get the status of the semantic search index.
