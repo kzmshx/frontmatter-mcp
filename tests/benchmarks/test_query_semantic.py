@@ -26,7 +26,7 @@ def _create_mock_semantic_context(paths: list[str], dim: int = 256) -> SemanticC
     mock_model.encode.return_value = np.random.rand(dim).astype(np.float32)
 
     mock_cache = MagicMock()
-    mock_cache.get_all.return_value = embeddings
+    mock_cache.get_all_readonly.return_value = embeddings
 
     mock_indexer = MagicMock()
 
