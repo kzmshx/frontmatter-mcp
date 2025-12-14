@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.1](https://github.com/kzmshx/frontmatter-mcp/compare/v0.5.0...v0.5.1) (2025-12-14)
+
+
+### Bug Fixes
+
+* use read-only connection for semantic query to avoid DuckDB lock conflicts ([#43](https://github.com/kzmshx/frontmatter-mcp/issues/43)) ([66f0baa](https://github.com/kzmshx/frontmatter-mcp/commit/66f0baa37d7f3ab045ffa7ecac32d96af947f119)), closes [#42](https://github.com/kzmshx/frontmatter-mcp/issues/42)
+
+
+### Documentation
+
+* translate CLAUDE.md and SETUP.md to English ([#39](https://github.com/kzmshx/frontmatter-mcp/issues/39)) ([c5fc96a](https://github.com/kzmshx/frontmatter-mcp/commit/c5fc96a32d71a2fa770c44fce9d9c092348d9e67))
+
 ## [0.5.0](https://github.com/kzmshx/frontmatter-mcp/compare/v0.4.4...v0.5.0) (2025-12-07)
 
 
