@@ -17,7 +17,7 @@ def create_mock_semantic_context(
 ) -> SemanticContext:
     """Create a mock SemanticContext for testing."""
     mock_cache = MagicMock()
-    mock_cache.get_all.return_value = embeddings
+    mock_cache.get_all_readonly.return_value = embeddings
     mock_indexer = MagicMock()
     return SemanticContext(model=model, cache=mock_cache, indexer=mock_indexer)
 

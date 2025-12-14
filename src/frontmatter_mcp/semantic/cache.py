@@ -207,6 +207,32 @@ class EmbeddingCache:
         results = self.conn.execute("SELECT path, vector FROM embeddings").fetchall()
         return {row[0]: np.array(row[1]) for row in results}
 
+    def get_all_readonly(self) -> dict[str, np.ndarray]:
+        """Get all cached embeddings using a read-only connection.
+
+        This method opens a separate read-only connection to avoid lock
+        conflicts when another process holds the write lock.
+
+        Returns:
+            Dictionary mapping path to embedding vector.
+            Empty dict if database doesn't exist or is locked.
+        """
+        if not self.cache_path.exists():
+            return {}
+        try:
+            with duckdb.connect(str(self.cache_path), read_only=True) as conn:
+                results = conn.execute("SELECT path, vector FROM embeddings").fetchall()
+                return {row[0]: np.array(row[1]) for row in results}
+        except (
+            duckdb.IOException,
+            duckdb.CatalogException,
+            duckdb.ConnectionException,
+        ):
+            # IOException: database is locked by another process
+            # CatalogException: embeddings table doesn't exist yet
+            # ConnectionException: can't open read-only while write connection exists
+            return {}
+
     def close(self) -> None:
         """Close the database connection."""
         if self._conn is not None:

@@ -41,8 +41,9 @@ def add_semantic_columns(
     # Add embedding column to files table
     conn.execute(f"ALTER TABLE files ADD COLUMN embedding FLOAT[{dim}]")
 
-    # Get embeddings from cache and bulk insert via PyArrow
-    embeddings = ctx.cache.get_all()
+    # Get embeddings from cache using read-only connection
+    # This avoids lock conflicts when another process holds the write lock
+    embeddings = ctx.cache.get_all_readonly()
     if embeddings:
         paths = list(embeddings.keys())
         vectors = [v.tolist() for v in embeddings.values()]

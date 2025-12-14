@@ -180,6 +180,42 @@ class TestEmbeddingCache:
         np.testing.assert_array_almost_equal(result["a.md"], vector_a, decimal=5)
         np.testing.assert_array_almost_equal(result["b.md"], vector_b, decimal=5)
 
+    def test_get_all_readonly(self, cache: EmbeddingCache) -> None:
+        """Get all embeddings using read-only connection."""
+        vector_a = np.random.rand(256).astype(np.float32)
+        vector_b = np.random.rand(256).astype(np.float32)
+        cache.set("a.md", 1000.0, vector_a)
+        cache.set("b.md", 2000.0, vector_b)
+        cache.close()  # Close write connection
+
+        result = cache.get_all_readonly()
+        assert len(result) == 2
+        np.testing.assert_array_almost_equal(result["a.md"], vector_a, decimal=5)
+        np.testing.assert_array_almost_equal(result["b.md"], vector_b, decimal=5)
+
+    def test_get_all_readonly_returns_empty_when_db_not_exists(
+        self, cache_dir: Path
+    ) -> None:
+        """get_all_readonly returns empty dict when database doesn't exist."""
+        mock_model = create_mock_model()
+        cache = EmbeddingCache(cache_dir, model=mock_model)
+        # Don't trigger connection, so DB file doesn't exist
+        result = cache.get_all_readonly()
+        assert result == {}
+
+    def test_get_all_readonly_returns_empty_when_locked(
+        self, cache: EmbeddingCache
+    ) -> None:
+        """get_all_readonly returns empty dict when database is locked."""
+        vector = np.random.rand(256).astype(np.float32)
+        cache.set("a.md", 1000.0, vector)
+        # Keep write connection open (simulating another process holding the lock)
+        # Note: DuckDB's read_only connection cannot coexist with a write connection
+        # from the same process, but in production this simulates a different process
+        result = cache.get_all_readonly()
+        # When locked, should return empty dict instead of raising exception
+        assert result == {}
+
 
 class TestEmbeddingCacheModelChange:
     """Tests for model change detection."""
