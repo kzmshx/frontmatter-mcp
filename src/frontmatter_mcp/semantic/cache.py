@@ -223,9 +223,14 @@ class EmbeddingCache:
             with duckdb.connect(str(self.cache_path), read_only=True) as conn:
                 results = conn.execute("SELECT path, vector FROM embeddings").fetchall()
                 return {row[0]: np.array(row[1]) for row in results}
-        except (duckdb.IOException, duckdb.CatalogException):
+        except (
+            duckdb.IOException,
+            duckdb.CatalogException,
+            duckdb.ConnectionException,
+        ):
             # IOException: database is locked by another process
             # CatalogException: embeddings table doesn't exist yet
+            # ConnectionException: can't open read-only while write connection exists
             return {}
 
     def close(self) -> None:

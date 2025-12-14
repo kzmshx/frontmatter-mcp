@@ -203,6 +203,19 @@ class TestEmbeddingCache:
         result = cache.get_all_readonly()
         assert result == {}
 
+    def test_get_all_readonly_returns_empty_when_locked(
+        self, cache: EmbeddingCache
+    ) -> None:
+        """get_all_readonly returns empty dict when database is locked."""
+        vector = np.random.rand(256).astype(np.float32)
+        cache.set("a.md", 1000.0, vector)
+        # Keep write connection open (simulating another process holding the lock)
+        # Note: DuckDB's read_only connection cannot coexist with a write connection
+        # from the same process, but in production this simulates a different process
+        result = cache.get_all_readonly()
+        # When locked, should return empty dict instead of raising exception
+        assert result == {}
+
 
 class TestEmbeddingCacheModelChange:
     """Tests for model change detection."""
