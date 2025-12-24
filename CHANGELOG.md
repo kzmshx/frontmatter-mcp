@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.2](https://github.com/kzmshx/frontmatter-mcp/compare/v0.5.1...v0.5.2) (2025-12-24)
+
+
+### Refactoring
+
+* use FastMCP Depends for dependency injection ([#45](https://github.com/kzmshx/frontmatter-mcp/issues/45)) ([346e634](https://github.com/kzmshx/frontmatter-mcp/commit/346e63451a5fc154e767133fda36615b921daa93))
+
 ## [0.5.1](https://github.com/kzmshx/frontmatter-mcp/compare/v0.5.0...v0.5.1) (2025-12-14)
 
 
