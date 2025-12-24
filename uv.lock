@@ -482,8 +482,8 @@ dev = [
 requires-dist = [
     { name = "duckdb", specifier = ">=1.0.0,<2.0.0" },
     { name = "fastmcp", specifier = ">=2.13.3,<3.0.0" },
-    { name = "protobuf", marker = "extra == 'semantic'", specifier = ">=3.0.0,<6.0.0" },
-    { name = "pyarrow", specifier = ">=22.0.0,<23.0.0" },
+    { name = "protobuf", marker = "extra == 'semantic'", specifier = ">=3.0.0,<7.0.0" },
+    { name = "pyarrow", specifier = ">=22.0.0,<26.0.0" },
     { name = "pydantic-settings", specifier = ">=2.0.0,<3.0.0" },
     { name = "python-frontmatter", specifier = ">=1.0.0,<2.0.0" },
     { name = "sentence-transformers", marker = "extra == 'semantic'", specifier = ">=2.0.0,<6.0.0" },
