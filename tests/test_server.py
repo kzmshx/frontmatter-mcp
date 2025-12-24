@@ -9,27 +9,43 @@ import frontmatter
 import numpy as np
 import pytest
 
+import frontmatter_mcp.dependencies as deps
 import frontmatter_mcp.server as server_module
 from frontmatter_mcp.settings import get_settings
 
 
 # Helper to call FastMCP tool functions (they're FunctionTool objects, not callables)
 def _call(tool_or_fn, *args, **kwargs):
-    """Call a tool function, handling both FastMCP FunctionTool and plain functions."""
+    """Call a tool function, handling both FastMCP FunctionTool and plain functions.
+
+    Automatically resolves dependencies by calling the dependency functions.
+    """
     fn = getattr(tool_or_fn, "fn", tool_or_fn)
-    return fn(*args, **kwargs)
+
+    # Resolve Depends defaults for parameters not provided
+    import inspect
+
+    from docket.dependencies import _Depends
+
+    sig = inspect.signature(fn)
+    resolved_kwargs = dict(kwargs)
+
+    for param_name, param in sig.parameters.items():
+        if param_name in resolved_kwargs:
+            continue
+        if param_name in ("args", "kwargs"):
+            continue
+        if isinstance(param.default, _Depends):
+            # Call the dependency function to get the value
+            resolved_kwargs[param_name] = param.default.dependency()
+
+    return fn(*args, **resolved_kwargs)
 
 
-def _setup_server_context() -> None:
-    """Set up server module globals for testing."""
-    server_module._settings = get_settings()
-    server_module._semantic_ctx = None
-
-
-def _teardown_server_context() -> None:
-    """Clear server module globals after testing."""
-    server_module._settings = None
-    server_module._semantic_ctx = None
+def _reset_caches() -> None:
+    """Reset all singleton caches for testing."""
+    deps.reset_caches()
+    get_settings.cache_clear()
 
 
 @pytest.fixture
@@ -66,13 +82,11 @@ summary: A summary
 """
         )
 
-        # Set base_dir via environment variable and set up server context
+        # Set base_dir via environment variable and reset caches
         monkeypatch.setenv("FRONTMATTER_BASE_DIR", str(base))
-        get_settings.cache_clear()
-        _setup_server_context()
+        _reset_caches()
         yield base
-        _teardown_server_context()
-        get_settings.cache_clear()
+        _reset_caches()
 
 
 class TestQueryInspect:
@@ -500,8 +514,7 @@ class TestSemanticSearchTools:
     def semantic_base_dir(self, temp_base_dir: Path, monkeypatch: pytest.MonkeyPatch):
         """Enable semantic search for tests."""
         monkeypatch.setenv("FRONTMATTER_ENABLE_SEMANTIC", "true")
-        get_settings.cache_clear()
-        _setup_server_context()
+        _reset_caches()
         yield temp_base_dir
 
     @pytest.fixture
@@ -530,8 +543,8 @@ class TestSemanticSearchTools:
 
         sem_ctx = SemanticContext(model=mock_model, cache=cache, indexer=indexer)
 
-        # Set the global semantic context
-        server_module._semantic_ctx = sem_ctx
+        # Set the semantic context cache in dependencies module
+        deps._semantic_ctx_cache = sem_ctx
 
         return sem_ctx
 
