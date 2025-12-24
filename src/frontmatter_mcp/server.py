@@ -6,7 +6,13 @@ from typing import Any
 
 import frontmatter
 from fastmcp import FastMCP
+from fastmcp.dependencies import Depends
 
+from frontmatter_mcp.dependencies import (
+    get_file_record_cache,
+    get_semantic_ctx,
+    get_settings,
+)
 from frontmatter_mcp.files import (
     FileRecordCache,
     parse_files,
@@ -14,21 +20,13 @@ from frontmatter_mcp.files import (
 )
 from frontmatter_mcp.query import create_base_connection, execute_query
 from frontmatter_mcp.query_schema import create_base_schema
-from frontmatter_mcp.semantic import (
-    SemanticContext,
-    add_semantic_columns,
-    get_semantic_context,
-)
+from frontmatter_mcp.semantic import SemanticContext, add_semantic_columns
 from frontmatter_mcp.semantic.query_schema import add_semantic_schema
-from frontmatter_mcp.settings import Settings, get_settings
+from frontmatter_mcp.settings import Settings
 
 Response = dict[str, Any]
 
 mcp = FastMCP("frontmatter-mcp")
-
-_settings: Settings | None = None
-_semantic_ctx: SemanticContext | None = None
-_file_record_cache: FileRecordCache = FileRecordCache()
 
 
 def _collect_files(base_dir: Path, glob_pattern: str) -> list[Path]:
@@ -87,7 +85,12 @@ def _resolve_path(base_dir: Path, rel_path: str) -> Path:
 
 
 @mcp.tool()
-def query_inspect(glob: str) -> Response:
+def query_inspect(
+    glob: str,
+    settings: Settings = Depends(get_settings),
+    cache: FileRecordCache = Depends(get_file_record_cache),
+    semantic_ctx: SemanticContext | None = Depends(get_semantic_ctx),
+) -> Response:
     """Get frontmatter schema from files matching glob pattern.
 
     Args:
@@ -96,19 +99,15 @@ def query_inspect(glob: str) -> Response:
     Returns:
         Dict with file_count, schema (type, nullable, examples).
     """
-    assert _settings is not None
-
-    paths = _collect_files(_settings.base_dir, glob)
-    records, warnings = parse_files(paths, _settings.base_dir, _file_record_cache)
+    paths = _collect_files(settings.base_dir, glob)
+    records, warnings = parse_files(paths, settings.base_dir, cache)
 
     # Create base schema with path and frontmatter columns
     schema = create_base_schema(records)
 
     # Add semantic schema columns if semantic search is ready
-    if _settings.enable_semantic:
-        assert _semantic_ctx is not None
-        if _semantic_ctx.is_ready:
-            add_semantic_schema(schema, _semantic_ctx)
+    if semantic_ctx is not None and semantic_ctx.is_ready:
+        add_semantic_schema(schema, semantic_ctx)
 
     return _build_response(
         {
@@ -120,7 +119,13 @@ def query_inspect(glob: str) -> Response:
 
 
 @mcp.tool()
-def query(glob: str, sql: str) -> Response:
+def query(
+    glob: str,
+    sql: str,
+    settings: Settings = Depends(get_settings),
+    cache: FileRecordCache = Depends(get_file_record_cache),
+    semantic_ctx: SemanticContext | None = Depends(get_semantic_ctx),
+) -> Response:
     """Query frontmatter with DuckDB SQL.
 
     Args:
@@ -142,19 +147,15 @@ def query(glob: str, sql: str) -> Response:
     Returns:
         Dict with results array, row_count, and columns.
     """
-    assert _settings is not None
-
-    paths = _collect_files(_settings.base_dir, glob)
-    records, warnings = parse_files(paths, _settings.base_dir, _file_record_cache)
+    paths = _collect_files(settings.base_dir, glob)
+    records, warnings = parse_files(paths, settings.base_dir, cache)
 
     # Create base connection with files table (path and frontmatter columns)
     conn = create_base_connection(records)
 
     # Add semantic search columns if enabled and ready
-    if _settings.enable_semantic:
-        assert _semantic_ctx is not None
-        if _semantic_ctx.is_ready:
-            add_semantic_columns(conn, _semantic_ctx)
+    if semantic_ctx is not None and semantic_ctx.is_ready:
+        add_semantic_columns(conn, semantic_ctx)
 
     query_result = execute_query(conn, sql)
 
@@ -169,7 +170,9 @@ def query(glob: str, sql: str) -> Response:
 
 
 @mcp.tool(enabled=False)
-def index_status() -> Response:
+def index_status(
+    semantic_ctx: SemanticContext | None = Depends(get_semantic_ctx),
+) -> Response:
     """Get the status of the semantic search index.
 
     Returns:
@@ -178,12 +181,15 @@ def index_status() -> Response:
         - indexing: Indexing is in progress
         - ready: Indexing completed, embed() and embedding column available
     """
-    assert _semantic_ctx is not None
-    return _build_response({"state": _semantic_ctx.indexer.state.value})
+    assert semantic_ctx is not None
+    return _build_response({"state": semantic_ctx.indexer.state.value})
 
 
 @mcp.tool(enabled=False)
-def index_wait(timeout: float = 60.0) -> Response:
+def index_wait(
+    timeout: float = 60.0,
+    semantic_ctx: SemanticContext | None = Depends(get_semantic_ctx),
+) -> Response:
     """Wait for semantic search indexing to complete.
 
     Blocks until indexing finishes or timeout is reached.
@@ -197,18 +203,20 @@ def index_wait(timeout: float = 60.0) -> Response:
         - success=true: Indexing completed or idle (not started)
         - success=false: Timeout reached while indexing in progress
     """
-    assert _semantic_ctx is not None
-    completed = _semantic_ctx.indexer.wait(timeout=timeout)
+    assert semantic_ctx is not None
+    completed = semantic_ctx.indexer.wait(timeout=timeout)
     return _build_response(
         {
             "success": completed,
-            "state": _semantic_ctx.indexer.state.value,
+            "state": semantic_ctx.indexer.state.value,
         }
     )
 
 
 @mcp.tool(enabled=False)
-def index_refresh() -> Response:
+def index_refresh(
+    semantic_ctx: SemanticContext | None = Depends(get_semantic_ctx),
+) -> Response:
     """Refresh the semantic search index (differential update).
 
     Starts background indexing. On first run, indexes all files.
@@ -222,8 +230,8 @@ def index_refresh() -> Response:
     Notes:
         Call this after editing files during a session to update the index.
     """
-    assert _semantic_ctx is not None
-    return _build_response(_semantic_ctx.indexer.start())
+    assert semantic_ctx is not None
+    return _build_response(semantic_ctx.indexer.start())
 
 
 @mcp.tool()
@@ -231,6 +239,7 @@ def update(
     path: str,
     set: dict[str, Any] | None = None,
     unset: list[str] | None = None,
+    settings: Settings = Depends(get_settings),
 ) -> Response:
     """Update frontmatter properties in a single file.
 
@@ -247,9 +256,7 @@ def update(
         - If same key appears in both set and unset, unset takes priority.
         - If file has no frontmatter, it will be created.
     """
-    assert _settings is not None
-
-    base_dir = _settings.base_dir
+    base_dir = settings.base_dir
     abs_path = _resolve_path(base_dir, path)
     result = update_file(abs_path, base_dir, set, unset)
 
@@ -261,6 +268,7 @@ def batch_update(
     glob: str,
     set: dict[str, Any] | None = None,
     unset: list[str] | None = None,
+    settings: Settings = Depends(get_settings),
 ) -> Response:
     """Update frontmatter properties in multiple files matching glob pattern.
 
@@ -277,9 +285,7 @@ def batch_update(
         - If a file has no frontmatter, it will be created.
         - Errors in individual files are recorded in warnings, not raised.
     """
-    assert _settings is not None
-
-    base_dir = _settings.base_dir
+    base_dir = settings.base_dir
     paths = _collect_files(base_dir, glob)
 
     updated_files: list[str] = []
@@ -308,6 +314,7 @@ def batch_array_add(
     property: str,
     value: Any,
     allow_duplicates: bool = False,
+    settings: Settings = Depends(get_settings),
 ) -> Response:
     """Add a value to an array property in multiple files.
 
@@ -325,9 +332,7 @@ def batch_array_add(
         - If property is not an array, file is skipped with a warning.
         - Files are only included in updated_files if actually modified.
     """
-    assert _settings is not None
-
-    base_dir = _settings.base_dir
+    base_dir = settings.base_dir
     paths = _collect_files(base_dir, glob)
 
     updated_files: list[str] = []
@@ -377,6 +382,7 @@ def batch_array_remove(
     glob: str,
     property: str,
     value: Any,
+    settings: Settings = Depends(get_settings),
 ) -> Response:
     """Remove a value from an array property in multiple files.
 
@@ -394,9 +400,7 @@ def batch_array_remove(
         - If property is not an array, file is skipped with a warning.
         - Files are only included in updated_files if actually modified.
     """
-    assert _settings is not None
-
-    base_dir = _settings.base_dir
+    base_dir = settings.base_dir
     paths = _collect_files(base_dir, glob)
 
     updated_files: list[str] = []
@@ -444,6 +448,7 @@ def batch_array_replace(
     property: str,
     old_value: Any,
     new_value: Any,
+    settings: Settings = Depends(get_settings),
 ) -> Response:
     """Replace a value in an array property in multiple files.
 
@@ -462,9 +467,7 @@ def batch_array_replace(
         - If property is not an array, file is skipped with a warning.
         - Files are only included in updated_files if actually modified.
     """
-    assert _settings is not None
-
-    base_dir = _settings.base_dir
+    base_dir = settings.base_dir
     paths = _collect_files(base_dir, glob)
 
     updated_files: list[str] = []
@@ -512,6 +515,7 @@ def batch_array_sort(
     glob: str,
     property: str,
     reverse: bool = False,
+    settings: Settings = Depends(get_settings),
 ) -> Response:
     """Sort an array property in multiple files.
 
@@ -530,9 +534,7 @@ def batch_array_sort(
         - If property is not an array, file is skipped with a warning.
         - Files are only included in updated_files if actually modified.
     """
-    assert _settings is not None
-
-    base_dir = _settings.base_dir
+    base_dir = settings.base_dir
     paths = _collect_files(base_dir, glob)
 
     updated_files: list[str] = []
@@ -590,6 +592,7 @@ def batch_array_sort(
 def batch_array_unique(
     glob: str,
     property: str,
+    settings: Settings = Depends(get_settings),
 ) -> Response:
     """Remove duplicate values from an array property in multiple files.
 
@@ -608,9 +611,7 @@ def batch_array_unique(
         - If property is not an array, file is skipped with a warning.
         - Files are only included in updated_files if actually modified.
     """
-    assert _settings is not None
-
-    base_dir = _settings.base_dir
+    base_dir = settings.base_dir
     paths = _collect_files(base_dir, glob)
 
     updated_files: list[str] = []
@@ -661,16 +662,15 @@ def batch_array_unique(
 
 def main() -> None:
     """Entry point for the MCP server."""
-    global _settings, _semantic_ctx
+    settings = get_settings()
 
-    _settings = get_settings()
-
-    if _settings.enable_semantic:
-        _semantic_ctx = get_semantic_context(_settings)
-        _semantic_ctx.indexer.start()
-        index_status.enable()
-        index_wait.enable()
-        index_refresh.enable()
+    if settings.enable_semantic:
+        semantic_ctx = get_semantic_ctx()
+        if semantic_ctx is not None:
+            semantic_ctx.indexer.start()
+            index_status.enable()
+            index_wait.enable()
+            index_refresh.enable()
 
     mcp.run()
 
