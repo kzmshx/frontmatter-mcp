@@ -16,7 +16,7 @@ dependencies = [
 
 [project.optional-dependencies]
 semantic = [
-  "protobuf>=3.0.0,<7.0.0",
+  "protobuf>=3.0.0,<6.0.0",
   "sentence-transformers>=2.0.0,<6.0.0",
   "sentencepiece>=0.1.0,<1.0.0",
 ]
