@@ -4,6 +4,8 @@ An MCP server for querying Markdown frontmatter with DuckDB SQL.
 
 ## Configuration
 
+### Basic Usage
+
 ```json
 {
   "mcpServers": {
@@ -20,7 +22,7 @@ An MCP server for querying Markdown frontmatter with DuckDB SQL.
 
 ### With Semantic Search
 
-To enable semantic search, use the `[semantic]` extras:
+Semantic search requires large dependencies (~1GB). Set `MCP_TIMEOUT` to extend installation timeout:
 
 ```json
 {
@@ -30,12 +32,15 @@ To enable semantic search, use the `[semantic]` extras:
       "args": ["--from", "frontmatter-mcp[semantic]", "frontmatter-mcp"],
       "env": {
         "FRONTMATTER_BASE_DIR": "/path/to/markdown/directory",
-        "FRONTMATTER_ENABLE_SEMANTIC": "true"
+        "FRONTMATTER_ENABLE_SEMANTIC": "true",
+        "MCP_TIMEOUT": "300000"
       }
     }
   }
 }
 ```
+
+Note: `MCP_TIMEOUT` is in milliseconds (300000 = 5 minutes).
 
 ## Installation (Optional)
 
