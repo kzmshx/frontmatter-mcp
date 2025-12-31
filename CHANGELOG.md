@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.3](https://github.com/kzmshx/frontmatter-mcp/compare/v0.5.2...v0.5.3) (2025-12-31)
+
+
+### Documentation
+
+* add MCP_TIMEOUT configuration for semantic search ([#48](https://github.com/kzmshx/frontmatter-mcp/issues/48)) ([27e2858](https://github.com/kzmshx/frontmatter-mcp/commit/27e28582be593a43eb15d8a31bbaffcbe1fc1d67))
+
 ## [0.5.2](https://github.com/kzmshx/frontmatter-mcp/compare/v0.5.1...v0.5.2) (2025-12-24)
 
 
