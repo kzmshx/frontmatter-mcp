@@ -1,4 +1,8 @@
 {
+  "env": {
+    "PDD_WORKSPACE_DIR": ".claude/pdd",
+    "PDD_LOCALE": "ja"
+  },
   "hooks": {
     "PostToolUse": [
       {
@@ -27,5 +31,8 @@
     ],
     "deny": [],
     "ask": []
+  },
+  "enabledPlugins": {
+    "pdd@kzmshx": true
   }
 }
