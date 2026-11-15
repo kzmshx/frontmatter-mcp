@@ -5,7 +5,12 @@ from pathlib import Path
 import pytest
 from fastmcp.exceptions import ToolError
 
-from frontmatter_mcp.paths import collect_files, list_markdown_files, resolve_file
+from frontmatter_mcp.paths import (
+    collect_files,
+    is_excluded,
+    list_markdown_files,
+    resolve_file,
+)
 
 
 def _touch(path: Path) -> Path:
@@ -60,3 +65,37 @@ def test_resolve_file(tmp_path: Path) -> None:
         resolve_file(tmp_path, "missing.md")
     with pytest.raises(ToolError, match="within the base directory"):
         resolve_file(tmp_path, "../a.md")
+
+
+@pytest.mark.parametrize(
+    ("path", "patterns", "expected"),
+    [
+        ("IDENTITY.md", ["IDENTITY.md"], True),
+        ("sub/IDENTITY.md", ["IDENTITY.md"], False),
+        ("sub/IDENTITY.md", ["**/IDENTITY.md"], True),
+        ("IDENTITY.md", ["**/IDENTITY.md"], True),
+        ("_templates/daily.md", ["_templates"], True),
+        ("_templates/daily.md", ["_templates/"], True),
+        ("_templates/sub/x.md", ["_templates/*.md"], False),
+        ("_templates/sub/x.md", ["_templates/**/*.md"], True),
+        ("daily/2026-11-16.md", ["daily/2025-*.md"], False),
+        ("daily/2025-01-01.md", ["daily/2025-*.md"], True),
+        ("notes/_templates/x.md", ["_templates"], False),
+        ("a.md", [], False),
+    ],
+)
+def test_is_excluded(path: str, patterns: list[str], expected: bool) -> None:
+    assert is_excluded(path, patterns) is expected
+
+
+def test_excluded_files_are_not_collected_listed_or_resolved(tmp_path: Path) -> None:
+    _touch(tmp_path / "a.md")
+    _touch(tmp_path / "IDENTITY.md")
+    _touch(tmp_path / "_templates/daily.md")
+    exclude = ["IDENTITY.md", "_templates"]
+    assert [p.name for p in collect_files(tmp_path, "**/*.md", exclude)] == ["a.md"]
+    assert [p.name for p in list_markdown_files(tmp_path, exclude)] == ["a.md"]
+    with pytest.raises(ToolError, match="excluded"):
+        resolve_file(tmp_path, "IDENTITY.md", exclude)
+    with pytest.raises(ToolError, match="excluded"):
+        resolve_file(tmp_path, "sub/../_templates/daily.md", exclude)

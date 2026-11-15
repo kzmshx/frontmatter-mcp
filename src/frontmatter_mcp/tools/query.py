@@ -57,7 +57,7 @@ def query_inspect(
     Returns:
         Dict with file_count and schema (type, nullable, examples per column).
     """
-    paths = collect_files(settings.base_dir, glob)
+    paths = collect_files(settings.base_dir, glob, settings.exclude)
     records, warnings = parse_files(paths, settings.base_dir, cache)
     schema = infer_schema(records)
     if semantic_ctx is not None and semantic_ctx.is_ready:
@@ -102,7 +102,7 @@ def query(
     Returns:
         Dict with results array, row_count, and columns.
     """
-    paths = collect_files(settings.base_dir, glob)
+    paths = collect_files(settings.base_dir, glob, settings.exclude)
     records, warnings = parse_files(paths, settings.base_dir, cache)
     conn = create_files_connection(records)
 

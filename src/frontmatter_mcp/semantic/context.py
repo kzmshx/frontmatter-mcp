@@ -116,8 +116,9 @@ def create_semantic_context(settings: Settings) -> SemanticContext:
     )
     store = ChunkStore(cache_dir=settings.cache_dir, model=model)
     base_dir = settings.base_dir
+    exclude = settings.exclude
     indexer = ChunkIndexer(
-        store, model, lambda: list_markdown_files(base_dir), base_dir
+        store, model, lambda: list_markdown_files(base_dir, exclude), base_dir
     )
     reranker = Reranker(settings.reranker_model) if settings.reranker_model else None
     return SemanticContext(model=model, store=store, indexer=indexer, reranker=reranker)

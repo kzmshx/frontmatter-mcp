@@ -1,7 +1,6 @@
 """Tools that change frontmatter: update, batch_update, batch_array_*."""
 
 from collections.abc import Callable
-from pathlib import Path
 from typing import Any
 
 from fastmcp.dependencies import Depends
@@ -20,11 +19,12 @@ from frontmatter_mcp.writer import apply_update, read_metadata, write_metadata
 Transform = Callable[[dict[str, Any]], dict[str, Any] | None]
 
 
-def _update_files(base_dir: Path, glob: str, transform: Transform) -> BatchResult:
+def _update_files(settings: Settings, glob: str, transform: Transform) -> BatchResult:
     """Apply transform to every matching file; errors become warnings."""
+    base_dir = settings.base_dir
     updated: list[str] = []
     warnings: list[FileWarning] = []
-    for path in collect_files(base_dir, glob):
+    for path in collect_files(base_dir, glob, settings.exclude):
         rel_path = relative(base_dir, path)
         try:
             new = transform(read_metadata(path))
@@ -82,7 +82,7 @@ def update(
         - If file has no frontmatter, it will be created.
     """
     base_dir = settings.base_dir
-    abs_path = resolve_file(base_dir, path)
+    abs_path = resolve_file(base_dir, path, settings.exclude)
     metadata = apply_update(read_metadata(abs_path), set, unset)
     updated = write_metadata(abs_path, metadata) if (set or unset) else False
     return UpdateResult(
@@ -115,7 +115,7 @@ def batch_update(
         - Errors in individual files are recorded in warnings, not raised.
     """
     return _update_files(
-        settings.base_dir, glob, lambda metadata: apply_update(metadata, set, unset)
+        settings, glob, lambda metadata: apply_update(metadata, set, unset)
     )
 
 
@@ -144,7 +144,7 @@ def batch_array_add(
         - Files are only included in updated_files if actually modified.
     """
     return _update_files(
-        settings.base_dir,
+        settings,
         glob,
         _on_array(property, lambda cur: array_ops.add(cur, value, allow_duplicates)),
     )
@@ -174,7 +174,7 @@ def batch_array_remove(
         - Files are only included in updated_files if actually modified.
     """
     return _update_files(
-        settings.base_dir,
+        settings,
         glob,
         _on_array(property, lambda cur: array_ops.remove(cur, value)),
     )
@@ -206,7 +206,7 @@ def batch_array_replace(
         - Files are only included in updated_files if actually modified.
     """
     return _update_files(
-        settings.base_dir,
+        settings,
         glob,
         _on_array(property, lambda cur: array_ops.replace(cur, old_value, new_value)),
     )
@@ -237,7 +237,7 @@ def batch_array_sort(
         - Files are only included in updated_files if actually modified.
     """
     return _update_files(
-        settings.base_dir,
+        settings,
         glob,
         _on_array(property, lambda cur: array_ops.sort(cur, reverse)),
     )
@@ -265,4 +265,4 @@ def batch_array_unique(
         - If property is not an array, file is skipped with a warning.
         - Files are only included in updated_files if actually modified.
     """
-    return _update_files(settings.base_dir, glob, _on_array(property, array_ops.unique))
+    return _update_files(settings, glob, _on_array(property, array_ops.unique))

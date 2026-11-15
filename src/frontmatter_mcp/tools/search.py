@@ -89,7 +89,7 @@ def search(
     semantic_ctx.ensure_index(wait_seconds=INDEX_WAIT_SECONDS)
     limit = max(1, min(limit, MAX_SEARCH_LIMIT))
     base_dir = settings.base_dir
-    paths = collect_files(base_dir, glob)
+    paths = collect_files(base_dir, glob, settings.exclude)
     allowed = {relative(base_dir, p) for p in paths}
     warnings: list[FileWarning] = []
     if where:
