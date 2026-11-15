@@ -1,5 +1,7 @@
 """MCP server entry point: registers the tools and runs the server."""
 
+import argparse
+import importlib.metadata
 import importlib.util
 import sys
 
@@ -52,8 +54,30 @@ def _missing_semantic_packages() -> list[str]:
     return [p for p in SEMANTIC_PACKAGES if importlib.util.find_spec(p) is None]
 
 
-def main() -> None:
+def _parse_args(argv: list[str] | None) -> None:
+    """Handle --version and --help; the server itself takes no arguments.
+
+    Runs before settings are read, so both work without FRONTMATTER_BASE_DIR.
+    """
+    parser = argparse.ArgumentParser(
+        prog="frontmatter-mcp",
+        description=(
+            "MCP server for querying and updating Markdown frontmatter. "
+            "Configured through FRONTMATTER_* environment variables; "
+            "FRONTMATTER_BASE_DIR is required."
+        ),
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {importlib.metadata.version('frontmatter-mcp')}",
+    )
+    parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> None:
     """Entry point for the MCP server."""
+    _parse_args(argv)
     settings = get_settings()
 
     if settings.enable_semantic:
