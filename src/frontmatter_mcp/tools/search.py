@@ -112,8 +112,9 @@ def index_status(
         Dict with:
         - state: "idle" (not started in this session; the first search starts
           it), "indexing" (a run is in progress), or "ready"
-        - has_index: whether search, embed() and embedding are usable. Stays
-          true during a refresh, which serves the previous index
+        - has_index: whether an index is being served (a run has finished,
+          or a search has loaded what is on disk). Stays true during a
+          refresh, which serves the previous index
         - last_run: files indexed, removed, and failed in the last finished
           run, and the error that stopped it, if any
     """

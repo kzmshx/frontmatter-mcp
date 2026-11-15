@@ -109,7 +109,8 @@ def query(
     # Semantic columns cost a search-index load; add them only when used
     if semantic_ctx is not None and _USES_EMBEDDING.search(sql):
         semantic_ctx.ensure_index(wait_seconds=INDEX_WAIT_SECONDS)
-        if semantic_ctx.is_ready:
+        # Like search, use whatever is indexed if the run is still going
+        if semantic_ctx.search_index() is not None:
             add_semantic_columns(conn, semantic_ctx)
 
     query_result = run_sql(conn, sql)

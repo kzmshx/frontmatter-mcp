@@ -29,11 +29,13 @@ class SemanticContext:
 
     @property
     def is_ready(self) -> bool:
-        """Whether an index exists: an indexing run has finished in this process.
+        """Whether an index is being served, without loading one.
 
-        Stays true while a later refresh runs; the previous index is served.
+        True once an indexing run has finished in this process, or once a
+        search has loaded the chunks already on disk (from an earlier session,
+        or written so far by the first run). Stays true while a refresh runs.
         """
-        return self.indexer.generation > 0
+        return self.indexer.generation > 0 or self._index is not None
 
     def ensure_index(self, wait_seconds: float = 0.0) -> None:
         """Start indexing if it has never run, and wait up to wait_seconds."""

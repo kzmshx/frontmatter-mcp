@@ -229,7 +229,8 @@ class ChunkStore:
         read-only.
 
         Returns:
-            All chunks, or None if the cache doesn't exist or can't be read.
+            All chunks, or None if the cache doesn't exist, can't be read, or was
+            made for another model or schema.
         """
         conn = self._conn
         if conn is not None:
@@ -241,9 +242,17 @@ class ChunkStore:
             return None
         try:
             with duckdb.connect(str(self.path), read_only=True) as ro:
+                # A file made for another model or schema is rebuilt on the
+                # next run; until then it has nothing usable
+                if not self._matches_setup(ro):
+                    return None
                 return self._read_chunks(ro)
         except _READONLY_ERRORS:
             return None
+
+    def _matches_setup(self, conn: duckdb.DuckDBPyConnection) -> bool:
+        stored = dict(conn.execute("SELECT key, value FROM metadata").fetchall())
+        return all(stored.get(k) == v for k, v in self._expected_metadata().items())
 
     def _read_chunks(self, conn: duckdb.DuckDBPyConnection) -> ChunkRows:
         relation: Any = conn.sql(

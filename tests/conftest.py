@@ -3,6 +3,7 @@
 import hashlib
 from collections.abc import Iterator
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -11,6 +12,8 @@ from numpy.typing import NDArray
 
 from frontmatter_mcp.dependencies import AppState, reset_state, set_state
 from frontmatter_mcp.semantic import ChunkIndexer, ChunkStore, SemanticContext
+from frontmatter_mcp.semantic.indexer import IndexerState
+from frontmatter_mcp.semantic.store import ChunkRows
 from frontmatter_mcp.settings import Settings
 
 DIM = 64
@@ -27,8 +30,12 @@ class FakeEmbeddingModel:
     query_prefix = ""
     document_prefix = ""
 
-    def __init__(self, dim: int = DIM) -> None:
+    def __init__(
+        self, dim: int = DIM, query_vector: NDArray[np.float32] | None = None
+    ) -> None:
         self.dim = dim
+        self.query_vector = query_vector
+        self.queries: list[str] = []
         self.encoded_documents: list[str] = []
         self.fail_with: Exception | None = None
 
@@ -48,6 +55,10 @@ class FakeEmbeddingModel:
         return v / norm if norm else v
 
     def encode_query(self, text: str) -> NDArray[np.float32]:
+        """The vector given to the constructor, or the text's own vector."""
+        self.queries.append(text)
+        if self.query_vector is not None:
+            return self.query_vector
         return self._vector(text)
 
     def encode_documents(
@@ -59,6 +70,43 @@ class FakeEmbeddingModel:
         if not texts:
             return np.zeros((0, self.dim), dtype=np.float32)
         return np.stack([self._vector(t) for t in texts])
+
+
+class StaticChunkStore:
+    """Store stand-in that serves fixed chunk rows; nothing is on disk."""
+
+    def __init__(self, rows: ChunkRows) -> None:
+        self.rows = rows
+        self.path = Path("/nonexistent") / "embeddings.duckdb"
+
+    def load_chunks(self) -> ChunkRows:
+        return self.rows
+
+
+def chunk_rows(vectors: dict[str, NDArray[np.float32]], dim: int = DIM) -> ChunkRows:
+    """Chunk rows with one chunk per document."""
+    paths = sorted(vectors)
+    return ChunkRows(
+        paths=paths,
+        lines=np.ones(len(paths), dtype=np.int64),
+        headings=[""] * len(paths),
+        texts=[""] * len(paths),
+        vectors=(
+            np.array([vectors[p] for p in paths], dtype=np.float32)
+            if paths
+            else np.zeros((0, dim), dtype=np.float32)
+        ),
+    )
+
+
+def static_semantic_context(
+    vectors: dict[str, NDArray[np.float32]], model: FakeEmbeddingModel
+) -> SemanticContext:
+    """A semantic context over fixed document vectors, as after one run."""
+    store: Any = StaticChunkStore(chunk_rows(vectors, model.dim))
+    indexer: Any = SimpleNamespace(generation=1, state=IndexerState.READY)
+    fake_model: Any = model
+    return SemanticContext(model=fake_model, store=store, indexer=indexer)
 
 
 class FakeReranker:
