@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.6.0](https://github.com/kzmshx/frontmatter-mcp/compare/v0.5.6...v0.6.0) (2026-11-15)
+
+
+### Features
+
+* add hybrid search over chunks with reranking ([#67](https://github.com/kzmshx/frontmatter-mcp/issues/67)) ([e811ce4](https://github.com/kzmshx/frontmatter-mcp/commit/e811ce42358178be8e8abcf2d472c21b1e24d8c8))
+* publish output schemas, report warnings as {path, error}, and explain SQL errors ([1907aea](https://github.com/kzmshx/frontmatter-mcp/commit/1907aead22b9a8e768a60ce38f575c378785b258))
+
+
+### Bug Fixes
+
+* act on every occurrence in batch_array_remove and batch_array_replace ([1907aea](https://github.com/kzmshx/frontmatter-mcp/commit/1907aead22b9a8e768a60ce38f575c378785b258))
+* ignore a frontmatter key named path instead of replacing the file path ([1907aea](https://github.com/kzmshx/frontmatter-mcp/commit/1907aead22b9a8e768a60ce38f575c378785b258))
+* leave files whose frontmatter would not change untouched ([1907aea](https://github.com/kzmshx/frontmatter-mcp/commit/1907aead22b9a8e768a60ce38f575c378785b258))
+* make the default install (without [semantic]) start ([#70](https://github.com/kzmshx/frontmatter-mcp/issues/70)) ([44f4a50](https://github.com/kzmshx/frontmatter-mcp/commit/44f4a500d55b6178b06b00dcedbc479585916d0b))
+* rewrite only the frontmatter keys that change ([#66](https://github.com/kzmshx/frontmatter-mcp/issues/66)) ([ff43259](https://github.com/kzmshx/frontmatter-mcp/commit/ff4325951617d10e3570dc2016800c16faf4ba29))
+* stop interpreting glob characters in the base directory ([1907aea](https://github.com/kzmshx/frontmatter-mcp/commit/1907aead22b9a8e768a60ce38f575c378785b258))
+
+
+### Performance
+
+* speed up query and search, and make indexing state and errors visible ([#69](https://github.com/kzmshx/frontmatter-mcp/issues/69)) ([491b17d](https://github.com/kzmshx/frontmatter-mcp/commit/491b17debc38b488f73c34d5a8e984ee2ce87d4f))
+
+
+### Refactoring
+
+* organize modules by responsibility ([1907aea](https://github.com/kzmshx/frontmatter-mcp/commit/1907aead22b9a8e768a60ce38f575c378785b258))
+
 ## [0.5.6](https://github.com/kzmshx/frontmatter-mcp/compare/v0.5.5...v0.5.6) (2026-11-15)
 
 
