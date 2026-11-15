@@ -99,7 +99,7 @@ def test_semantic_enabled_without_extra_keeps_tools_disabled(
     enabled: list[object] = []
     monkeypatch.setattr(server_module.mcp, "enable", lambda **kw: enabled.append(kw))
     reset_state()
-    server_module.main()
+    server_module.main([])
     assert enabled == []
     assert "frontmatter-mcp[semantic]" in capsys.readouterr().err
 
@@ -113,5 +113,27 @@ def test_semantic_tools_enabled_when_packages_present(
     enabled: list[object] = []
     monkeypatch.setattr(server_module.mcp, "enable", lambda **kw: enabled.append(kw))
     reset_state()
-    server_module.main()
+    server_module.main([])
     assert enabled == [{"tags": {"semantic"}}]
+
+
+def test_version_works_without_settings(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.delenv("FRONTMATTER_BASE_DIR", raising=False)
+    reset_state()
+    with pytest.raises(SystemExit) as exc:
+        server_module.main(["--version"])
+    assert exc.value.code == 0
+    assert capsys.readouterr().out.startswith("frontmatter-mcp ")
+
+
+def test_help_works_without_settings(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.delenv("FRONTMATTER_BASE_DIR", raising=False)
+    reset_state()
+    with pytest.raises(SystemExit) as exc:
+        server_module.main(["--help"])
+    assert exc.value.code == 0
+    assert "FRONTMATTER_BASE_DIR" in capsys.readouterr().out
