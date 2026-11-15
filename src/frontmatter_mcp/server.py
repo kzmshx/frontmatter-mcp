@@ -1,6 +1,8 @@
 """MCP Server implementation using FastMCP."""
 
 import glob as globmodule
+import importlib.util
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -772,13 +774,27 @@ def batch_array_unique(
 mcp.disable(tags={"semantic"})
 
 
+SEMANTIC_PACKAGES = ("sentence_transformers", "sklearn", "scipy")
+
+
+def _missing_semantic_packages() -> list[str]:
+    return [p for p in SEMANTIC_PACKAGES if importlib.util.find_spec(p) is None]
+
+
 def main() -> None:
     """Entry point for the MCP server."""
     settings = get_settings()
 
     if settings.enable_semantic:
-        semantic_ctx = get_semantic_ctx()
-        if semantic_ctx is not None:
+        if missing := _missing_semantic_packages():
+            # Keep serving the other tools; say why search is not available
+            print(
+                "frontmatter-mcp: FRONTMATTER_ENABLE_SEMANTIC is set but "
+                f"{', '.join(missing)} is not installed; semantic tools are "
+                "disabled. Install frontmatter-mcp[semantic].",
+                file=sys.stderr,
+            )
+        else:
             # Indexing starts on the first semantic call, not here, so sessions
             # that never search don't load the model
             mcp.enable(tags={"semantic"})
