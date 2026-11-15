@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.5](https://github.com/kzmshx/frontmatter-mcp/compare/v0.5.4...v0.5.5) (2026-11-15)
+
+
+### Bug Fixes
+
+* **deps:** bump duckdb from 1.5.6 to 2.0.0 ([#59](https://github.com/kzmshx/frontmatter-mcp/issues/59)) ([399f263](https://github.com/kzmshx/frontmatter-mcp/commit/399f263829bcb032c888f71c9c634f3cbc0fd95d))
+* **deps:** bump pyarrow from 25.0.1 to 26.0.1 ([#58](https://github.com/kzmshx/frontmatter-mcp/issues/58)) ([f93cb47](https://github.com/kzmshx/frontmatter-mcp/commit/f93cb4726391040dfdb049072d776cf1731ca45a))
+* pass read-only tool annotations as a dict so they type-check on FastMCP 4 ([#61](https://github.com/kzmshx/frontmatter-mcp/issues/61)) ([adc6fc4](https://github.com/kzmshx/frontmatter-mcp/commit/adc6fc4e98e97bd208e382d9fc28fcfbe66d1146))
+
 ## [0.5.4](https://github.com/kzmshx/frontmatter-mcp/compare/v0.5.3...v0.5.4) (2026-11-15)
 
 
