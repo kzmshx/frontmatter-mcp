@@ -2,42 +2,8 @@
 
 from datetime import date
 from typing import Any
-from unittest.mock import MagicMock
 
-import numpy as np
-
-from frontmatter_mcp.semantic.context import SemanticContext
 from frontmatter_mcp.sql import create_files_connection, execute_query
-
-
-def _rows(embeddings: dict[str, Any]) -> Any:
-    """Chunk rows with one chunk per document."""
-    from frontmatter_mcp.semantic.store import ChunkRows
-
-    paths = sorted(embeddings)
-    dim = len(next(iter(embeddings.values()))) if embeddings else 256
-    return ChunkRows(
-        paths=paths,
-        lines=np.ones(len(paths), dtype=np.int64),
-        headings=[""] * len(paths),
-        texts=[""] * len(paths),
-        vectors=(
-            np.array([embeddings[p] for p in paths], dtype=np.float32)
-            if paths
-            else np.zeros((0, dim), dtype=np.float32)
-        ),
-    )
-
-
-def create_mock_semantic_context(
-    embeddings: dict[str, np.ndarray[Any, Any]],
-    model: MagicMock,
-) -> SemanticContext:
-    """Create a mock SemanticContext for testing."""
-    mock_store = MagicMock()
-    mock_store.load_chunks.return_value = _rows(embeddings)
-    mock_indexer = MagicMock()
-    return SemanticContext(model=model, store=mock_store, indexer=mock_indexer)
 
 
 def _execute_query_simple(records: list[dict[str, Any]], sql: str) -> dict[str, Any]:

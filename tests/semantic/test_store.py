@@ -116,6 +116,17 @@ class TestChunkStore:
         cache = ChunkStore(tmp_path / "none", model=create_mock_model())
         assert cache.load_chunks() is None
 
+    def test_readonly_ignores_a_store_for_another_model(self, cache_dir: Path) -> None:
+        """Before the next run rebuilds it, a mismatched file serves nothing."""
+        first = ChunkStore(cache_dir, model=create_mock_model(name="a"))
+        first.replace_files([("a.md", 1000.0, chunks("x"), vectors(1))])
+        first.close()
+
+        assert ChunkStore(cache_dir, model=create_mock_model(name="a")).load_chunks()
+        other = ChunkStore(cache_dir, model=create_mock_model(name="b", dimension=16))
+        assert other.load_chunks() is None
+        assert other.path.exists()  # reading doesn't delete it
+
     def test_rebuilt_when_model_changes(self, cache_dir: Path) -> None:
         first = ChunkStore(cache_dir, model=create_mock_model(name="a"))
         first.replace_files([("a.md", 1000.0, chunks("x"), vectors(1))])

@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from frontmatter_mcp.semantic import SemanticContext
+from frontmatter_mcp.semantic import ChunkIndexer, ChunkStore, SemanticContext
 from tests.conftest import FakeReranker
 
 
@@ -39,6 +39,24 @@ def test_status_before_and_after_a_run(
     status = semantic_ctx.status()
     assert status["has_index"] is True
     assert status["last_run"]["error"] is None
+
+
+def test_index_on_disk_is_served_before_the_first_run(
+    base_dir: Path, semantic_ctx: SemanticContext
+) -> None:
+    """A new session serves the previous session's index while refreshing."""
+    semantic_ctx.ensure_index(wait_seconds=10)
+    semantic_ctx.store.close()
+
+    store = ChunkStore(semantic_ctx.store.path.parent, semantic_ctx.model)
+    indexer = ChunkIndexer(store, semantic_ctx.model, lambda: [], base_dir)
+    next_session = SemanticContext(
+        model=semantic_ctx.model, store=store, indexer=indexer
+    )
+    assert next_session.status()["has_index"] is False
+    assert next_session.search_index() is not None
+    assert next_session.status()["has_index"] is True
+    store.close()
 
 
 def test_search_uses_reranker_when_set(
