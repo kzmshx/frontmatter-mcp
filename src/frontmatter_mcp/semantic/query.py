@@ -20,16 +20,13 @@ def add_semantic_columns(
         conn: DuckDB connection with 'files' table already created.
         ctx: Semantic context with model and cache.
     """
-    # Install and load VSS extension
-    conn.execute("INSTALL vss")
-    conn.execute("LOAD vss")
-
     # Get dimension from model
     dim = ctx.model.get_dimension()
 
-    # Register embed() function
+    # Register embed(): encodes a search query (query prefix, normalized), so
+    # array_cosine_similarity(embedding, embed('...')) ranks documents
     def embed_func(text: str) -> list[float]:
-        return cast(list[float], ctx.model.encode(text).tolist())
+        return cast(list[float], ctx.model.encode_query(text).tolist())
 
     conn.create_function(
         "embed",

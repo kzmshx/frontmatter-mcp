@@ -5,10 +5,12 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Callable
 
-import frontmatter
-
 from frontmatter_mcp.semantic.cache import EmbeddingCache
+from frontmatter_mcp.semantic.chunking import Chunk, chunk_markdown
 from frontmatter_mcp.semantic.model import EmbeddingModel
+
+# Encode this many chunks per model call during indexing
+ENCODE_BATCH_CHUNKS = 256
 
 
 class IndexerState(Enum):
@@ -44,6 +46,13 @@ class EmbeddingIndexer:
         self._state = IndexerState.IDLE
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
+        self._generation = 0
+
+    @property
+    def generation(self) -> int:
+        """Incremented each time an indexing run finishes."""
+        with self._lock:
+            return self._generation
 
     @property
     def state(self) -> IndexerState:
@@ -93,6 +102,7 @@ class EmbeddingIndexer:
             self._cache.close()
             with self._lock:
                 self._state = IndexerState.READY
+                self._generation += 1
 
     def _index_files(self, files: list[Path]) -> None:
         """Index the given files.
@@ -118,32 +128,45 @@ class EmbeddingIndexer:
         for path in deleted_paths:
             self._cache.delete(path)
 
-        # Index stale files
+        # Encode chunks of several files at once (batching is much faster), then
+        # write each file's chunks in its own transaction
+        pending: list[tuple[str, list[Chunk]]] = []
+        pending_chunks = 0
         for rel_path in stale_paths:
-            abs_path = self._base_dir / rel_path
-            try:
-                content = self._get_content(abs_path)
-                if content:
-                    vector = self._model.encode(content)
-                    mtime = current_files[rel_path]
-                    self._cache.set(rel_path, mtime, vector)
-            except Exception:
-                # Skip files that can't be processed
+            chunks = self._get_chunks(self._base_dir / rel_path)
+            if chunks is None:
                 continue
+            pending.append((rel_path, chunks))
+            pending_chunks += len(chunks)
+            if pending_chunks >= ENCODE_BATCH_CHUNKS:
+                self._flush(pending, current_files)
+                pending, pending_chunks = [], 0
+        self._flush(pending, current_files)
 
-    def _get_content(self, file_path: Path) -> str | None:
-        """Get content from a file for embedding.
-
-        Args:
-            file_path: Path to the file.
-
-        Returns:
-            File content (body text after frontmatter), or None if empty.
-        """
+    def _flush(
+        self, pending: list[tuple[str, list[Chunk]]], current_files: dict[str, float]
+    ) -> None:
+        texts = [c.text for _, chunks in pending for c in chunks]
+        if not pending:
+            return
         try:
-            post = frontmatter.load(file_path)
-            content = post.content.strip()
-            return content if content else None
+            vectors = self._model.encode_documents(texts)
+        except Exception:
+            return
+        offset = 0
+        for rel_path, chunks in pending:
+            self._cache.set_file(
+                rel_path,
+                current_files[rel_path],
+                chunks,
+                vectors[offset : offset + len(chunks)],
+            )
+            offset += len(chunks)
+
+    def _get_chunks(self, file_path: Path) -> list[Chunk] | None:
+        """Split a file into chunks, or None if it can't be read."""
+        try:
+            return chunk_markdown(file_path.read_text(encoding="utf-8"))
         except Exception:
             return None
 

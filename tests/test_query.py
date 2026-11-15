@@ -234,7 +234,7 @@ class TestSemanticSearch:
 
         mock_model = MagicMock()
         mock_model.get_dimension.return_value = 256
-        mock_model.encode.return_value = np.random.rand(256).astype(np.float32)
+        mock_model.encode_query.return_value = np.random.rand(256).astype(np.float32)
 
         semantic = create_mock_semantic_context(embeddings, mock_model)
 
@@ -253,7 +253,7 @@ class TestSemanticSearch:
 
         mock_model = MagicMock()
         mock_model.get_dimension.return_value = 256
-        mock_model.encode.return_value = np.random.rand(256).astype(np.float32)
+        mock_model.encode_query.return_value = np.random.rand(256).astype(np.float32)
 
         semantic = create_mock_semantic_context(embeddings, mock_model)
 
@@ -265,7 +265,7 @@ class TestSemanticSearch:
 
         assert result["row_count"] == 1
         assert "query_vec" in result["columns"]
-        mock_model.encode.assert_called_with("test query")
+        mock_model.encode_query.assert_called_with("test query")
 
     def test_cosine_similarity_calculation(self) -> None:
         """array_cosine_similarity works with embeddings."""
@@ -282,7 +282,7 @@ class TestSemanticSearch:
 
         mock_model = MagicMock()
         mock_model.get_dimension.return_value = 256
-        mock_model.encode.return_value = query_vec
+        mock_model.encode_query.return_value = query_vec
 
         semantic = create_mock_semantic_context(embeddings, mock_model)
 

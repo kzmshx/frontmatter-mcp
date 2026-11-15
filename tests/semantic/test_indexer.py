@@ -10,230 +10,172 @@ import pytest
 
 from frontmatter_mcp.semantic import EmbeddingCache, EmbeddingIndexer, IndexerState
 
+DIM = 8
+LONG = "This paragraph is long enough to become a chunk."
+
+
+def _fake_encode(texts: list[str], batch_size: int = 64) -> np.ndarray:
+    v = np.random.rand(len(texts), DIM).astype(np.float32)
+    return v / np.maximum(np.linalg.norm(v, axis=1, keepdims=True), 1e-9)
+
 
 class TestEmbeddingIndexer:
     """Tests for EmbeddingIndexer class."""
 
     @pytest.fixture
-    def cache_dir(self, tmp_path: Path) -> Path:
-        """Create a temporary cache directory."""
-        return tmp_path / ".frontmatter-mcp"
-
-    @pytest.fixture
     def base_dir(self, tmp_path: Path) -> Path:
-        """Create a temporary base directory with test files."""
         base = tmp_path / "vault"
         base.mkdir()
         return base
 
     @pytest.fixture
     def mock_model(self) -> MagicMock:
-        """Create a mock embedding model."""
         model = MagicMock()
         model.name = "test-model"
-        model.encode.return_value = np.random.rand(256).astype(np.float32)
-        model.get_dimension.return_value = 256
+        model.document_prefix = ""
+        model.get_dimension.return_value = DIM
+        model.encode_documents.side_effect = _fake_encode
         return model
 
     @pytest.fixture
     def cache(
-        self, cache_dir: Path, mock_model: MagicMock
+        self, tmp_path: Path, mock_model: MagicMock
     ) -> Generator[EmbeddingCache, None, None]:
-        """Create a cache instance."""
-        cache = EmbeddingCache(cache_dir, model=mock_model)
+        cache = EmbeddingCache(tmp_path / ".frontmatter-mcp", model=mock_model)
         yield cache
         cache.close()
 
     def _create_md_file(self, base_dir: Path, name: str, content: str) -> Path:
-        """Create a markdown file with frontmatter."""
         file_path = base_dir / name
         file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_text(f"---\ntitle: {name}\n---\n{content}")
         return file_path
 
+    def _run(self, indexer: EmbeddingIndexer) -> None:
+        indexer.start()
+        assert indexer.wait(timeout=5.0)
+
     def test_initial_state(
         self, cache: EmbeddingCache, mock_model: MagicMock, base_dir: Path
     ) -> None:
-        """EmbeddingIndexer starts in IDLE state."""
         indexer = EmbeddingIndexer(cache, mock_model, lambda: [], base_dir)
         assert indexer.state == IndexerState.IDLE
+        assert indexer.generation == 0
 
     def test_start_indexing(
         self, cache: EmbeddingCache, mock_model: MagicMock, base_dir: Path
     ) -> None:
-        """Start begins background indexing and transitions to READY on completion."""
-        self._create_md_file(base_dir, "a.md", "Content A")
-        self._create_md_file(base_dir, "b.md", "Content B")
-
+        self._create_md_file(base_dir, "a.md", f"# A\n\n{LONG}")
+        self._create_md_file(base_dir, "b.md", f"{LONG}\n\n# B2\n\n{LONG}")
         files = list(base_dir.glob("*.md"))
         indexer = EmbeddingIndexer(cache, mock_model, lambda: files, base_dir)
 
-        # Before start
-        assert indexer.state == IndexerState.IDLE
-
         result = indexer.start()
         assert result["state"] == "indexing"
-        assert result["message"] == "Indexing started"
         assert result["target_count"] == 2
+        assert indexer.wait(timeout=5.0)
 
-        # Wait for completion
-        indexer.wait(timeout=5.0)
         assert indexer.state == IndexerState.READY
+        assert indexer.generation == 1
         assert cache.count() == 2
+        assert cache.chunk_count() == 3
+
+    def test_chunks_record_heading_and_line(
+        self, cache: EmbeddingCache, mock_model: MagicMock, base_dir: Path
+    ) -> None:
+        self._create_md_file(base_dir, "a.md", f"# Title\n\n{LONG}\n")
+        indexer = EmbeddingIndexer(
+            cache, mock_model, lambda: list(base_dir.glob("*.md")), base_dir
+        )
+        self._run(indexer)
+        rows = cache.load_chunks_readonly()
+        assert rows is not None
+        assert rows.headings == ["Title"]
+        assert rows.lines.tolist() == [6]  # 3 frontmatter lines + heading + blank
+        mock_model.encode_documents.assert_called()
 
     def test_duplicate_start(
         self, cache: EmbeddingCache, mock_model: MagicMock, base_dir: Path
     ) -> None:
-        """Starting while already indexing returns appropriate message."""
-        self._create_md_file(base_dir, "a.md", "Content A")
+        self._create_md_file(base_dir, "a.md", LONG)
 
-        # Make encode slow to keep indexing state
-        def slow_encode(text):
+        def slow(texts: list[str], batch_size: int = 64) -> np.ndarray:
             time.sleep(0.5)
-            return np.random.rand(256).astype(np.float32)
+            return _fake_encode(texts)
 
-        mock_model.encode.side_effect = slow_encode
-
+        mock_model.encode_documents.side_effect = slow
         files = list(base_dir.glob("*.md"))
         indexer = EmbeddingIndexer(cache, mock_model, lambda: files, base_dir)
 
-        result1 = indexer.start()
-        assert result1["state"] == "indexing"
-        assert result1["message"] == "Indexing started"
-
-        # Try to start again while indexing
-        result2 = indexer.start()
-        assert result2["state"] == "indexing"
-        assert result2["message"] == "Indexing already in progress"
-
+        assert indexer.start()["message"] == "Indexing started"
+        assert indexer.start()["message"] == "Indexing already in progress"
         indexer.wait(timeout=5.0)
 
     def test_differential_update(
         self, cache: EmbeddingCache, mock_model: MagicMock, base_dir: Path
     ) -> None:
-        """Only stale files are re-indexed."""
-        file_a = self._create_md_file(base_dir, "a.md", "Content A")
-        file_b = self._create_md_file(base_dir, "b.md", "Content B")
+        file_a = self._create_md_file(base_dir, "a.md", LONG)
+        file_b = self._create_md_file(base_dir, "b.md", LONG)
+        indexer = EmbeddingIndexer(
+            cache, mock_model, lambda: [file_a, file_b], base_dir
+        )
+        self._run(indexer)
+        first_texts = mock_model.encode_documents.call_args.args[0]
+        assert len(first_texts) == 2
 
-        files = [file_a, file_b]
-        indexer = EmbeddingIndexer(cache, mock_model, lambda: files, base_dir)
+        mock_model.encode_documents.reset_mock()
+        time.sleep(0.01)
+        file_a.write_text(f"---\ntitle: a\n---\nUpdated. {LONG}")
+        self._run(indexer)
 
-        # First indexing
-        indexer.start()
-        indexer.wait(timeout=5.0)
-        assert mock_model.encode.call_count == 2
-
-        mock_model.encode.reset_mock()
-
-        # Modify one file
-        time.sleep(0.01)  # Ensure mtime changes
-        file_a.write_text("---\ntitle: a.md\n---\nUpdated Content A")
-
-        # Second indexing
-        indexer.start()
-        indexer.wait(timeout=5.0)
-
-        # Only modified file should be re-indexed
-        assert mock_model.encode.call_count == 1
+        texts = mock_model.encode_documents.call_args.args[0]
+        assert texts == [f"Updated. {LONG}"]
 
     def test_deleted_file_removed_from_cache(
         self, cache: EmbeddingCache, mock_model: MagicMock, base_dir: Path
     ) -> None:
-        """Deleted files are removed from cache."""
-        file_a = self._create_md_file(base_dir, "a.md", "Content A")
-        file_b = self._create_md_file(base_dir, "b.md", "Content B")
-
-        files = [file_a, file_b]
-        indexer = EmbeddingIndexer(cache, mock_model, lambda: files, base_dir)
-
-        # First indexing
-        indexer.start()
-        indexer.wait(timeout=5.0)
+        file_a = self._create_md_file(base_dir, "a.md", LONG)
+        file_b = self._create_md_file(base_dir, "b.md", LONG)
+        both = [file_a, file_b]
+        self._run(EmbeddingIndexer(cache, mock_model, lambda: both, base_dir))
         assert cache.count() == 2
 
-        # Delete one file
         file_b.unlink()
+        self._run(EmbeddingIndexer(cache, mock_model, lambda: [file_a], base_dir))
+        assert cache.get_all_paths_with_mtime().keys() == {"a.md"}
 
-        # Re-index with only file_a
-        indexer2 = EmbeddingIndexer(cache, mock_model, lambda: [file_a], base_dir)
-        indexer2.start()
-        indexer2.wait(timeout=5.0)
-
-        assert cache.count() == 1
-        assert cache.get("b.md") is None
-
-    def test_empty_content_skipped(
+    def test_file_without_chunks_is_recorded_once(
         self, cache: EmbeddingCache, mock_model: MagicMock, base_dir: Path
     ) -> None:
-        """Files with empty content are skipped."""
-        self._create_md_file(base_dir, "empty.md", "")
-        self._create_md_file(base_dir, "has_content.md", "Some content")
-
+        """Short files are recorded so they are not re-read on every run."""
+        self._create_md_file(base_dir, "short.md", "tiny")
         files = list(base_dir.glob("*.md"))
         indexer = EmbeddingIndexer(cache, mock_model, lambda: files, base_dir)
-
-        indexer.start()
-        indexer.wait(timeout=5.0)
-
-        # Only file with content should be indexed
+        self._run(indexer)
         assert cache.count() == 1
-
-    def test_wait_returns_true_on_completion(
-        self, cache: EmbeddingCache, mock_model: MagicMock, base_dir: Path
-    ) -> None:
-        """Wait returns True when indexing completes."""
-        self._create_md_file(base_dir, "a.md", "Content")
-
-        files = list(base_dir.glob("*.md"))
-        indexer = EmbeddingIndexer(cache, mock_model, lambda: files, base_dir)
-
-        indexer.start()
-        result = indexer.wait(timeout=5.0)
-
-        assert result is True
-        assert indexer.state == IndexerState.READY
+        assert cache.chunk_count() == 0
+        assert cache.get_stale_paths({"short.md": files[0].stat().st_mtime}) == []
 
     def test_wait_returns_true_when_not_started(
         self, cache: EmbeddingCache, mock_model: MagicMock, base_dir: Path
     ) -> None:
-        """Wait returns True when indexing was never started."""
         indexer = EmbeddingIndexer(cache, mock_model, lambda: [], base_dir)
-        result = indexer.wait(timeout=1.0)
-        assert result is True
+        assert indexer.wait(timeout=1.0) is True
 
     def test_subdirectory_files(
         self, cache: EmbeddingCache, mock_model: MagicMock, base_dir: Path
     ) -> None:
-        """Files in subdirectories are indexed with relative paths."""
-        self._create_md_file(base_dir, "root.md", "Root content")
-        self._create_md_file(base_dir, "sub/nested.md", "Nested content")
-
+        self._create_md_file(base_dir, "root.md", LONG)
+        self._create_md_file(base_dir, "sub/nested.md", LONG)
         files = list(base_dir.rglob("*.md"))
-        indexer = EmbeddingIndexer(cache, mock_model, lambda: files, base_dir)
-
-        indexer.start()
-        indexer.wait(timeout=5.0)
-
-        assert cache.count() == 2
-        assert cache.get("root.md") is not None
-        assert cache.get("sub/nested.md") is not None
+        self._run(EmbeddingIndexer(cache, mock_model, lambda: files, base_dir))
+        assert cache.get_all_paths_with_mtime().keys() == {"root.md", "sub/nested.md"}
 
     def test_cache_connection_closed_after_indexing(
         self, cache: EmbeddingCache, mock_model: MagicMock, base_dir: Path
     ) -> None:
-        """Cache connection is closed after indexing completes.
-
-        This prevents DuckDB file lock conflicts when query tries to access
-        the cache after indexing is done.
-        """
-        self._create_md_file(base_dir, "a.md", "Content A")
-
+        """Closing the connection avoids DuckDB lock conflicts with readers."""
+        self._create_md_file(base_dir, "a.md", LONG)
         files = list(base_dir.glob("*.md"))
-        indexer = EmbeddingIndexer(cache, mock_model, lambda: files, base_dir)
-
-        indexer.start()
-        indexer.wait(timeout=5.0)
-
-        assert indexer.state == IndexerState.READY
-        # Connection should be closed after indexing
+        self._run(EmbeddingIndexer(cache, mock_model, lambda: files, base_dir))
         assert cache._conn is None

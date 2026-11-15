@@ -146,9 +146,13 @@ def query(
         sql: SQL query string. Reference 'files' table. Columns are frontmatter
             properties plus 'path'.
 
-    Semantic search (when enabled and indexing is complete):
-        - embedding: document embedding vector (NULL if not indexed)
-        - embed('text'): converts text to embedding vector
+    For searching document text, prefer the search tool: it matches passages,
+    combines meaning and wording, and returns the matching text.
+
+    Semantic columns (when enabled and indexing is complete):
+        - embedding: document vector, the mean of its chunk vectors (NULL if
+          not indexed)
+        - embed('text'): encodes text as a search query
         - array_cosine_similarity(a, b): similarity score (0-1)
 
         Example - find similar documents:
@@ -182,6 +186,70 @@ def query(
     )
 
 
+MAX_SEARCH_LIMIT = 50
+
+
+@mcp.tool(tags={"semantic"}, annotations=READ_ONLY)
+def search(
+    query: str,
+    glob: str = "**/*.md",
+    where: str | None = None,
+    limit: int = 10,
+    settings: Settings = Depends(get_settings),
+    cache: FileRecordCache = Depends(get_file_record_cache),
+    semantic_ctx: SemanticContext | None = Depends(get_semantic_ctx),
+) -> Response:
+    """Search document text and return the best-matching passage of each document.
+
+    Combines meaning (embeddings of ~400-character chunks) with wording
+    (character-bigram BM25), then reranks the candidates with a cross-encoder.
+    Works for paraphrases ("felt lonely on my birthday") as well as exact names.
+    Use the returned path and line to read more of a document.
+
+    Args:
+        query: What to look for, as a sentence or keywords.
+        glob: Glob pattern relative to base directory to search within.
+        where: Optional SQL condition on frontmatter to restrict documents, using
+            the same columns as the query tool. Examples:
+            "date < '2026-11-01'", "path LIKE 'daily/%'",
+            "list_contains(from_json(tags, '[\"VARCHAR\"]'), 'record/daily')".
+        limit: Maximum number of documents to return (1-50). Default 10.
+
+    Returns:
+        Dict with results (path, line, heading, text, score; best first) and
+        index_state. Scores are only comparable within one search.
+    """
+    assert semantic_ctx is not None
+    limit = max(1, min(limit, MAX_SEARCH_LIMIT))
+    base_dir = settings.base_dir
+    paths = _collect_files(base_dir, glob)
+    allowed = {str(p.relative_to(base_dir)) for p in paths}
+    warnings: list[Any] = []
+    if where:
+        records, warnings = parse_files(paths, base_dir, cache)
+        conn = create_base_connection(records)
+        rows = execute_query(conn, f"SELECT path FROM files WHERE {where}")
+        allowed &= {r["path"] for r in rows["results"]}
+
+    index = semantic_ctx.search_index()
+    hits = []
+    if index is not None and allowed:
+        hits = index.search(
+            semantic_ctx.model.encode_query(query),
+            query,
+            limit,
+            allowed_paths=allowed,
+            reranker=semantic_ctx.reranker,
+        )
+    return _build_response(
+        {
+            "results": [h.to_dict() for h in hits],
+            "index_state": semantic_ctx.indexer.state.value,
+        },
+        warnings,
+    )
+
+
 @mcp.tool(tags={"semantic"}, annotations=READ_ONLY)
 def index_status(
     semantic_ctx: SemanticContext | None = Depends(get_semantic_ctx),
@@ -192,7 +260,7 @@ def index_status(
         Dict with state ("idle", "indexing", "ready").
         - idle: Indexing has never been started
         - indexing: Indexing is in progress
-        - ready: Indexing completed, embed() and embedding column available
+        - ready: Indexing completed; search, embed() and embedding available
     """
     assert semantic_ctx is not None
     return _build_response({"state": semantic_ctx.indexer.state.value})

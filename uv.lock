@@ -655,6 +655,9 @@ dependencies = [
 [package.optional-dependencies]
 semantic = [
     { name = "protobuf" },
+    { name = "scikit-learn" },
+    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "sentence-transformers" },
     { name = "sentencepiece" },
 ]
@@ -681,6 +684,8 @@ requires-dist = [
     { name = "pyarrow", specifier = ">=22.0.0,<27.0.0" },
     { name = "pydantic-settings", specifier = ">=2.0.0,<3.0.0" },
     { name = "python-frontmatter", specifier = ">=1.0.0,<2.0.0" },
+    { name = "scikit-learn", marker = "extra == 'semantic'", specifier = ">=1.1.0,<2.0.0" },
+    { name = "scipy", marker = "extra == 'semantic'", specifier = ">=1.10.0,<2.0.0" },
     { name = "sentence-transformers", marker = "extra == 'semantic'", specifier = ">=2.0.0,<7.0.0" },
     { name = "sentencepiece", marker = "extra == 'semantic'", specifier = ">=0.1.0,<1.0.0" },
 ]
