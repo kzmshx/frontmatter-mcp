@@ -653,6 +653,7 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "python-frontmatter" },
     { name = "ruamel-yaml" },
+    { name = "typing-extensions" },
 ]
 
 [package.optional-dependencies]
@@ -667,16 +668,12 @@ semantic = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "frontmatter-mcp", extra = ["semantic"] },
     { name = "mypy" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
-    { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
-    { name = "protobuf" },
     { name = "pytest" },
     { name = "pytest-benchmark" },
     { name = "pytest-github-actions-annotate-failures" },
     { name = "ruff" },
-    { name = "sentence-transformers" },
-    { name = "sentencepiece" },
 ]
 
 [package.metadata]
@@ -693,20 +690,18 @@ requires-dist = [
     { name = "scipy", marker = "extra == 'semantic'", specifier = ">=1.10.0,<2.0.0" },
     { name = "sentence-transformers", marker = "extra == 'semantic'", specifier = ">=2.0.0,<7.0.0" },
     { name = "sentencepiece", marker = "extra == 'semantic'", specifier = ">=0.1.0,<1.0.0" },
+    { name = "typing-extensions", specifier = ">=4.10.0" },
 ]
 provides-extras = ["semantic"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "frontmatter-mcp", extras = ["semantic"] },
     { name = "mypy", specifier = ">=1.0.0" },
-    { name = "numpy", specifier = ">=2.0.0" },
-    { name = "protobuf", specifier = ">=3.0.0" },
     { name = "pytest", specifier = ">=8.0.0" },
     { name = "pytest-benchmark", specifier = ">=5.0.0" },
     { name = "pytest-github-actions-annotate-failures", specifier = ">=0.2.0" },
     { name = "ruff", specifier = ">=0.14.0" },
-    { name = "sentence-transformers", specifier = ">=2.0.0" },
-    { name = "sentencepiece", specifier = ">=0.1.0" },
 ]
 
 [[package]]

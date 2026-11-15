@@ -10,9 +10,9 @@ from pathlib import Path
 import pytest
 from fastmcp import Client
 
-import frontmatter_mcp.dependencies as deps
 import frontmatter_mcp.server as server_module
-from frontmatter_mcp.settings import get_settings
+from frontmatter_mcp.dependencies import AppState, reset_state, set_state
+from frontmatter_mcp.settings import Settings
 
 READ_ONLY = {"query_inspect", "query"}
 WRITE = {
@@ -38,11 +38,9 @@ def base_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     (tmp_path / "a.md").write_text("---\ndate: 2025-11-27\ntags: [x]\n---\nBody\n")
     monkeypatch.setenv("FRONTMATTER_BASE_DIR", str(tmp_path))
     monkeypatch.delenv("FRONTMATTER_ENABLE_SEMANTIC", raising=False)
-    deps.reset_caches()
-    get_settings.cache_clear()
+    set_state(AppState(settings=Settings(base_dir=tmp_path)))
     yield tmp_path
-    deps.reset_caches()
-    get_settings.cache_clear()
+    reset_state()
 
 
 async def test_semantic_tools_hidden_by_default(base_dir: Path) -> None:
@@ -75,7 +73,10 @@ async def test_query_over_mcp(base_dir: Path) -> None:
         result = await client.call_tool(
             "query", {"glob": "*.md", "sql": "SELECT path, date FROM files"}
         )
-    assert result.data["results"] == [{"path": "a.md", "date": "2025-11-27"}]
+    assert result.structured_content is not None
+    assert result.structured_content["results"] == [
+        {"path": "a.md", "date": "2025-11-27"}
+    ]
 
 
 async def test_update_over_mcp(base_dir: Path) -> None:
@@ -97,7 +98,7 @@ def test_semantic_enabled_without_extra_keeps_tools_disabled(
     monkeypatch.setattr(server_module.mcp, "run", lambda: None)
     enabled: list[object] = []
     monkeypatch.setattr(server_module.mcp, "enable", lambda **kw: enabled.append(kw))
-    get_settings.cache_clear()
+    reset_state()
     server_module.main()
     assert enabled == []
     assert "frontmatter-mcp[semantic]" in capsys.readouterr().err

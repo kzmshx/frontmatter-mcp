@@ -1,4 +1,4 @@
-"""Cache module for chunk embeddings using DuckDB."""
+"""On-disk store of document chunks and their vectors (DuckDB)."""
 
 import os
 from dataclasses import dataclass
@@ -11,12 +11,13 @@ import pyarrow as pa
 from numpy.typing import NDArray
 
 from frontmatter_mcp.semantic.chunking import Chunk
-from frontmatter_mcp.semantic.model import EmbeddingModel
+from frontmatter_mcp.semantic.models import EmbeddingModel
 
-# Cache database filename
-CACHE_DB_NAME = "embeddings.duckdb"
-# Bump when the tables or what goes into a vector change; the cache is rebuilt
-SCHEMA_VERSION = "2"
+# Database filename. Kept from the first version: a rebuild deletes the file by
+# this name, so renaming it would leave the old file behind
+STORE_DB_NAME = "embeddings.duckdb"
+# Bump when the tables or what goes into a vector change; the store is rebuilt
+SCHEMA_VERSION = "3"
 
 _READONLY_ERRORS = (
     duckdb.IOException,  # database is locked by another process
@@ -39,23 +40,24 @@ class ChunkRows:
         return len(self.paths)
 
 
-class EmbeddingCache:
-    """DuckDB-based cache for chunk embeddings.
+class ChunkStore:
+    """DuckDB store of indexed files, their chunks, and chunk vectors.
 
     Tables:
-        files(path, mtime): every indexed file, including ones with no chunks
+        indexed_files(path, mtime): every indexed file, including ones with no
+            chunks
         chunks(path, idx, line, heading, text, vector): one row per chunk
         metadata(key, value): schema version, model, dimension, document prefix
     """
 
     def __init__(self, cache_dir: Path, model: EmbeddingModel) -> None:
-        """Initialize the embedding cache.
+        """Initialize the store.
 
         The database connection is lazy-initialized on first access.
         This allows the model to be loaded only when actually needed.
 
         Args:
-            cache_dir: Directory to store the cache database.
+            cache_dir: Directory for the database file.
             model: Embedding model (used for model name, dimension, and prefix).
         """
         self._cache_dir = cache_dir
@@ -63,9 +65,9 @@ class EmbeddingCache:
         self._conn: duckdb.DuckDBPyConnection | None = None
 
     @property
-    def cache_path(self) -> Path:
-        """Get the path to the cache database."""
-        return self._cache_dir / CACHE_DB_NAME
+    def path(self) -> Path:
+        """Path of the database file."""
+        return self._cache_dir / STORE_DB_NAME
 
     @property
     def conn(self) -> duckdb.DuckDBPyConnection:
@@ -80,11 +82,11 @@ class EmbeddingCache:
             "schema_version": SCHEMA_VERSION,
             "model_name": self._model.name,
             "dimension": str(self._model.get_dimension()),
-            "document_prefix": getattr(self._model, "document_prefix", ""),
+            "document_prefix": self._model.document_prefix,
         }
 
     def _remove_files(self) -> None:
-        for path in (self.cache_path, Path(f"{self.cache_path}.wal")):
+        for path in (self.path, Path(f"{self.path}.wal")):
             path.unlink(missing_ok=True)
 
     def _connect(self) -> None:
@@ -95,7 +97,7 @@ class EmbeddingCache:
         """
         self._cache_dir.mkdir(parents=True, exist_ok=True)
         expected = self._expected_metadata()
-        self._conn = duckdb.connect(str(self.cache_path))
+        self._conn = duckdb.connect(str(self.path))
         try:
             stored = dict(
                 self._conn.execute("SELECT key, value FROM metadata").fetchall()
@@ -105,7 +107,7 @@ class EmbeddingCache:
         if any(stored.get(k) != v for k, v in expected.items()):
             self._conn.close()
             self._remove_files()
-            self._conn = duckdb.connect(str(self.cache_path))
+            self._conn = duckdb.connect(str(self.path))
             self._conn.execute(
                 "CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT)"
             )
@@ -115,7 +117,8 @@ class EmbeddingCache:
             )
         dim = expected["dimension"]
         self._conn.execute(
-            "CREATE TABLE IF NOT EXISTS files (path TEXT PRIMARY KEY, mtime DOUBLE)"
+            "CREATE TABLE IF NOT EXISTS indexed_files "
+            "(path TEXT PRIMARY KEY, mtime DOUBLE)"
         )
         self._conn.execute(f"""
             CREATE TABLE IF NOT EXISTS chunks (
@@ -128,22 +131,7 @@ class EmbeddingCache:
             )
         """)
 
-    def clear(self) -> None:
-        """Clear all cached files and chunks."""
-        self.conn.execute("DELETE FROM chunks")
-        self.conn.execute("DELETE FROM files")
-
-    def set_file(
-        self,
-        path: str,
-        mtime: float,
-        chunks: list[Chunk],
-        vectors: NDArray[np.float32],
-    ) -> None:
-        """Replace the chunks of one file (see set_files)."""
-        self.set_files([(path, mtime, chunks, vectors)])
-
-    def set_files(
+    def replace_files(
         self,
         entries: list[tuple[str, float, list[Chunk], NDArray[np.float32]]],
     ) -> None:
@@ -200,7 +188,7 @@ class EmbeddingCache:
                 FROM new_chunks
             """)
             conn.execute(
-                "INSERT OR REPLACE INTO files SELECT path, mtime FROM new_files"
+                "INSERT OR REPLACE INTO indexed_files SELECT path, mtime FROM new_files"
             )
             conn.execute("COMMIT")
         except BaseException:
@@ -210,39 +198,29 @@ class EmbeddingCache:
             conn.unregister("new_chunks")
             conn.unregister("new_files")
 
-    def delete(self, path: str) -> None:
+    def delete_file(self, path: str) -> None:
         """Delete a file and its chunks."""
         self.conn.execute("DELETE FROM chunks WHERE path = ?", [path])
-        self.conn.execute("DELETE FROM files WHERE path = ?", [path])
+        self.conn.execute("DELETE FROM indexed_files WHERE path = ?", [path])
 
-    def get_all_paths_with_mtime(self) -> dict[str, float]:
+    def indexed_mtimes(self) -> dict[str, float]:
         """Get all indexed paths with their modification times."""
-        rows = self.conn.execute("SELECT path, mtime FROM files").fetchall()
+        rows = self.conn.execute("SELECT path, mtime FROM indexed_files").fetchall()
         return {row[0]: row[1] for row in rows}
 
-    def get_stale_paths(self, current_files: dict[str, float]) -> list[str]:
+    def stale_paths(self, current_files: dict[str, float]) -> list[str]:
         """Get paths that are new or changed since they were indexed."""
-        cached = self.get_all_paths_with_mtime()
+        cached = self.indexed_mtimes()
         return [
             path for path, mtime in current_files.items() if cached.get(path) != mtime
         ]
 
-    def get_deleted_paths(self, current_files: dict[str, float]) -> list[str]:
+    def deleted_paths(self, current_files: dict[str, float]) -> list[str]:
         """Get paths that are indexed but no longer exist."""
-        cached = self.get_all_paths_with_mtime()
+        cached = self.indexed_mtimes()
         return [path for path in cached if path not in current_files]
 
-    def count(self) -> int:
-        """Get the number of indexed files."""
-        result = self.conn.execute("SELECT COUNT(*) FROM files").fetchone()
-        return result[0] if result else 0
-
-    def chunk_count(self) -> int:
-        """Get the number of indexed chunks."""
-        result = self.conn.execute("SELECT COUNT(*) FROM chunks").fetchone()
-        return result[0] if result else 0
-
-    def load_chunks_readonly(self) -> ChunkRows | None:
+    def load_chunks(self) -> ChunkRows | None:
         """Load every chunk without taking the write lock.
 
         In the process that is indexing, DuckDB refuses a second (read-only)
@@ -259,10 +237,10 @@ class EmbeddingCache:
                 return self._read_chunks(conn.cursor())
             except duckdb.Error:
                 pass  # closed by the indexer meanwhile; open the file instead
-        if not self.cache_path.exists():
+        if not self.path.exists():
             return None
         try:
-            with duckdb.connect(str(self.cache_path), read_only=True) as ro:
+            with duckdb.connect(str(self.path), read_only=True) as ro:
                 return self._read_chunks(ro)
         except _READONLY_ERRORS:
             return None
@@ -309,7 +287,7 @@ class EmbeddingCache:
             True if the file was rewritten.
         """
         self.conn.execute("CHECKPOINT")
-        size = self.cache_path.stat().st_size
+        size = self.path.stat().st_size
         row = self.conn.execute(
             "SELECT value FROM metadata WHERE key = 'compact_size'"
         ).fetchone()
@@ -318,7 +296,7 @@ class EmbeddingCache:
             if size <= base * growth or size - base < min_growth_bytes:
                 return False
 
-        compact = self.cache_path.with_name(self.cache_path.name + ".compact")
+        compact = self.path.with_name(self.path.name + ".compact")
         compact.unlink(missing_ok=True)
         name = self.conn.execute("SELECT current_database()").fetchone()
         assert name is not None
@@ -327,12 +305,12 @@ class EmbeddingCache:
         self.conn.execute(f'COPY FROM DATABASE "{name[0]}" TO compact_target')
         self.conn.execute("DETACH compact_target")
         self.close()
-        os.replace(compact, self.cache_path)
-        Path(f"{self.cache_path}.wal").unlink(missing_ok=True)
+        os.replace(compact, self.path)
+        Path(f"{self.path}.wal").unlink(missing_ok=True)
 
         self.conn.execute(
             "INSERT OR REPLACE INTO metadata (key, value) VALUES ('compact_size', ?)",
-            [str(self.cache_path.stat().st_size)],
+            [str(self.path.stat().st_size)],
         )
         self.conn.execute("CHECKPOINT")
         return True

@@ -7,6 +7,7 @@ frontmatter-mcp is an MCP (Model Context Protocol) server for querying and manip
 ## Tech Stack
 
 - Python 3.11+
+- sentence-transformers, scikit-learn, scipy (optional `semantic` extra)
 - FastMCP (MCP server framework)
 - DuckDB (SQL query engine)
 - python-frontmatter (YAML frontmatter parsing)
@@ -18,21 +19,15 @@ frontmatter-mcp is an MCP (Model Context Protocol) server for querying and manip
 
 ## Codebase Structure
 
-```
-src/frontmatter_mcp/
-  __init__.py
-  server.py       # Main MCP server and tool definitions
-  frontmatter.py  # Frontmatter parsing utilities
-  query.py        # DuckDB query execution
-  schema.py       # Schema inspection
+See docs/adr/0013-organize-modules-by-responsibility.md for the module layout:
+`app.py` (FastMCP instance), `server.py` (registration, main), `tools/` (query,
+write, search tools), core modules (`paths`, `markdown`, `records`, `writer`,
+`array_ops`, `sql`, `schema`, `settings`, `dependencies`) and `semantic/`
+(chunking, models, store, indexer, search, context, sql).
 
-tests/
-  test_server.py  # Integration tests
-
-docs/
-  workspace/      # Branch-specific work documents (gitignored)
-  adr/            # Architecture Decision Records
-```
+Tests mirror the source layout: `tests/test_*.py`, `tests/tools/`,
+`tests/semantic/`, `tests/benchmarks/` (run in CI with --benchmark-disable).
+Shared fixtures and fakes are in `tests/conftest.py`.
 
 ## Available Tools
 
@@ -46,3 +41,6 @@ docs/
 | batch_array_remove | Remove value from array property |
 | batch_array_replace | Replace value in array property |
 | batch_array_sort | Sort array property |
+| batch_array_unique | Remove duplicate values from array property |
+| search | Hybrid search over document text (semantic extra) |
+| index_status / index_wait / index_refresh | Semantic index state and refresh (semantic extra) |

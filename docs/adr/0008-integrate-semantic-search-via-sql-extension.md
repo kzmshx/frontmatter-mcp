@@ -6,6 +6,8 @@ Date: 2025-12-05
 
 Accepted
 
+Amended by [12. Use hybrid chunk search with reranking](0012-use-hybrid-chunk-search-with-reranking.md)
+
 ## Context
 
 When adding semantic search capability to frontmatter-mcp, we needed to decide how users would interact with the feature.

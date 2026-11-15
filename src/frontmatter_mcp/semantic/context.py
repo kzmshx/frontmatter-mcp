@@ -1,24 +1,28 @@
-"""Semantic search context management."""
+"""The semantic search context: the one object the tools talk to."""
 
 import threading
 from dataclasses import dataclass, field
-from pathlib import Path
+from typing import Any
 
-from frontmatter_mcp.semantic.cache import EmbeddingCache
-from frontmatter_mcp.semantic.indexer import EmbeddingIndexer, IndexerState
-from frontmatter_mcp.semantic.model import EmbeddingModel
-from frontmatter_mcp.semantic.search import Reranker, SearchIndex
+import numpy as np
+from numpy.typing import NDArray
+
+from frontmatter_mcp.paths import list_markdown_files
+from frontmatter_mcp.semantic.indexer import ChunkIndexer, IndexerState
+from frontmatter_mcp.semantic.models import EmbeddingModel, Reranker, Scorer
+from frontmatter_mcp.semantic.search import SearchHit, SearchIndex
+from frontmatter_mcp.semantic.store import ChunkStore
 from frontmatter_mcp.settings import Settings
 
 
 @dataclass
 class SemanticContext:
-    """Context for semantic search operations."""
+    """Model, store, indexer and reranker, behind a small facade."""
 
     model: EmbeddingModel
-    cache: EmbeddingCache
-    indexer: EmbeddingIndexer
-    reranker: Reranker | None = None
+    store: ChunkStore
+    indexer: ChunkIndexer
+    reranker: Scorer | None = None
     _index: SearchIndex | None = field(default=None, repr=False)
     _index_key: tuple[int, float] | None = field(default=None, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
@@ -38,55 +42,74 @@ class SemanticContext:
         if wait_seconds > 0:
             self.indexer.wait(timeout=wait_seconds)
 
+    def refresh(self) -> dict[str, Any]:
+        """Start a differential indexing run (or report the one in progress)."""
+        return self.indexer.start()
+
+    def wait(self, timeout: float) -> bool:
+        """Wait for a run in progress; True when none is running."""
+        return self.indexer.wait(timeout=timeout)
+
+    def status(self) -> dict[str, Any]:
+        """State, whether an index exists, and the last run's statistics."""
+        indexer = self.indexer
+        return {
+            "state": indexer.state.value,
+            "has_index": self.is_ready,
+            "last_run": indexer.last_run.to_dict() if indexer.generation else None,
+        }
+
+    def search(
+        self, query: str, limit: int, allowed_paths: set[str] | None = None
+    ) -> list[SearchHit]:
+        """Hybrid search (see semantic.search); empty if nothing is indexed."""
+        index = self.search_index()
+        if index is None:
+            return []
+        return index.search(
+            self.model.encode_query(query),
+            query,
+            limit,
+            allowed_paths=allowed_paths,
+            reranker=self.reranker,
+        )
+
+    def document_vectors(self) -> dict[str, NDArray[np.float32]]:
+        """One vector per indexed document (mean of its chunks)."""
+        index = self.search_index()
+        return index.document_vectors() if index is not None else {}
+
     def search_index(self) -> SearchIndex | None:
         """In-memory search index, reloaded after each indexing run.
 
-        Returns None only if no index has been loaded yet and the cache can't
+        Returns None only if no index has been loaded yet and the store can't
         be read.
         """
-        path = self.cache.cache_path
+        path = self.store.path
         mtime = path.stat().st_mtime if path.exists() else 0.0
         key = (self.indexer.generation, mtime)
         with self._lock:
             if self._index is None or self._index_key != key:
-                rows = self.cache.load_chunks_readonly()
+                rows = self.store.load_chunks()
                 if rows is not None:
                     self._index = SearchIndex(rows)
                     self._index_key = key
-                # If the cache can't be read right now, keep serving the
+                # If the store can't be read right now, keep serving the
                 # previous index rather than returning nothing
             return self._index
 
 
-def get_semantic_context(settings: Settings) -> SemanticContext:
-    """Create a semantic context instance.
-
-    The model is lazy-loaded when first needed (e.g., when cache connects
-    or when encoding text). This allows the MCP server to start quickly.
-
-    Args:
-        settings: Application settings.
-
-    Returns:
-        SemanticContext with model, cache, indexer, and reranker.
-    """
+def create_semantic_context(settings: Settings) -> SemanticContext:
+    """Build the semantic context from settings. Models load on first use."""
     model = EmbeddingModel(
         settings.embedding_model,
-        query_prefix=settings.frontmatter_embedding_query_prefix,
-        document_prefix=settings.frontmatter_embedding_document_prefix,
+        query_prefix=settings.embedding_query_prefix,
+        document_prefix=settings.embedding_document_prefix,
     )
-    cache = EmbeddingCache(cache_dir=settings.cache_dir, model=model)
-
-    def get_files() -> list[Path]:
-        # Skip dot directories (.obsidian, .claude, the cache itself), as Obsidian does
-        base = settings.base_dir
-        return [
-            p
-            for p in base.rglob("*.md")
-            if not any(part.startswith(".") for part in p.relative_to(base).parts)
-        ]
-
-    indexer = EmbeddingIndexer(cache, model, get_files, settings.base_dir)
+    store = ChunkStore(cache_dir=settings.cache_dir, model=model)
+    base_dir = settings.base_dir
+    indexer = ChunkIndexer(
+        store, model, lambda: list_markdown_files(base_dir), base_dir
+    )
     reranker = Reranker(settings.reranker_model) if settings.reranker_model else None
-
-    return SemanticContext(model=model, cache=cache, indexer=indexer, reranker=reranker)
+    return SemanticContext(model=model, store=store, indexer=indexer, reranker=reranker)

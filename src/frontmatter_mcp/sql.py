@@ -1,4 +1,4 @@
-"""DuckDB query execution module."""
+"""DuckDB tables over frontmatter records, and sandboxed query execution."""
 
 import json
 from typing import Any
@@ -20,7 +20,9 @@ def _serialize_value(value: Any) -> str | None:
     return str(value)
 
 
-def create_base_connection(records: list[dict[str, Any]]) -> duckdb.DuckDBPyConnection:
+def create_files_connection(
+    records: list[dict[str, Any]],
+) -> duckdb.DuckDBPyConnection:
     """Create a new in-memory DuckDB connection with files table.
 
     Creates a files table with path and frontmatter columns.
@@ -37,10 +39,10 @@ def create_base_connection(records: list[dict[str, Any]]) -> duckdb.DuckDBPyConn
         conn.execute("CREATE TABLE files (path TEXT)")
         return conn
 
-    # Collect all unique keys across all records
-    all_keys: set[str] = set()
-    for record in records:
-        all_keys.update(record.keys())
+    # Columns in first-seen order with path first, so SELECT * is stable
+    all_keys: list[str] = list(
+        dict.fromkeys(["path", *(k for record in records for k in record)])
+    )
 
     # Build columns dict with serialized string values
     columns_data: dict[str, list[str | None]] = {key: [] for key in all_keys}
@@ -55,6 +57,7 @@ def create_base_connection(records: list[dict[str, Any]]) -> duckdb.DuckDBPyConn
     # Register and create actual table (not view)
     conn.register("_temp_source", table)
     conn.execute("CREATE TABLE files AS SELECT * FROM _temp_source")
+    conn.unregister("_temp_source")
 
     return conn
 
@@ -107,3 +110,8 @@ def execute_query(conn: duckdb.DuckDBPyConnection, sql: str) -> dict[str, Any]:
         "row_count": len(results),
         "columns": columns,
     }
+
+
+def files_columns(conn: duckdb.DuckDBPyConnection) -> list[str]:
+    """Column names of the files table."""
+    return [row[0] for row in conn.execute("DESCRIBE files").fetchall()]

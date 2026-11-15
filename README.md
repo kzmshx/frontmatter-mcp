@@ -72,20 +72,15 @@ Get schema information from frontmatter across files.
 {
   "file_count": 186,
   "schema": {
-    "date": { "type": "string", "count": 180, "nullable": true },
-    "tags": { "type": "array", "count": 150, "nullable": true }
+    "path": { "type": "string", "nullable": false, "examples": ["notes/a.md"] },
+    "date": { "type": "string", "nullable": true, "examples": ["2025-11-28"] },
+    "tags": { "type": "array", "nullable": true, "examples": [["python", "mcp"]] }
   }
 }
 
-// Output (with semantic search ready)
-{
-  "file_count": 186,
-  "schema": {
-    "date": { "type": "string", "count": 180, "nullable": true },
-    "tags": { "type": "array", "count": 150, "nullable": true },
-    "embedding": { "type": "FLOAT[256]", "nullable": false }
-  }
-}
+// With semantic search ready, the schema also has
+//   "embedding": { "type": "FLOAT[256]", "nullable": true }
+// (NULL for files without indexed text)
 ```
 
 ### query
@@ -134,8 +129,14 @@ Update frontmatter properties in a single file.
 { "path": "notes/idea.md", "set": {"status": "published"} }
 
 // Output
-{ "path": "notes/idea.md", "frontmatter": {"title": "Idea", "status": "published"} }
+{
+  "path": "notes/idea.md",
+  "frontmatter": {"title": "Idea", "status": "published"},
+  "updated": true
+}
 ```
+
+`updated` is false when the values were already as requested; the file is then not written.
 
 ### batch_update
 
@@ -156,6 +157,8 @@ Update frontmatter properties in multiple files.
 // Output
 { "updated_count": 5, "updated_files": ["drafts/a.md", "drafts/b.md", ...] }
 ```
+
+Files whose values are already as requested are not written and not listed.
 
 ### batch_array_add
 
@@ -288,7 +291,7 @@ This tool is only available when `FRONTMATTER_ENABLE_SEMANTIC=true`.
       "score": 0.9312
     }
   ],
-  "index_state": "ready"
+  "index": { "state": "ready", "has_index": true, "last_run": { "indexed": 1903, "removed": 0, "failed": 0, "error": null } }
 }
 ```
 
@@ -303,15 +306,37 @@ This tool is only available when `FRONTMATTER_ENABLE_SEMANTIC=true`.
 **Example:**
 
 ```json
-// Output (not started)
-{ "state": "idle" }
+// Output (not started in this session; the first search starts it)
+{ "state": "idle", "has_index": false, "last_run": null }
 
-// Output (indexing in progress)
-{ "state": "indexing" }
-
-// Output (ready)
-{ "state": "ready" }
+// Output (after a run)
+{
+  "state": "ready",
+  "has_index": true,
+  "last_run": { "indexed": 12, "removed": 0, "failed": 0, "error": null }
+}
 ```
+
+`has_index` stays true while a later refresh runs (the previous index is served). `last_run.error` says why a run stopped early (for example, the model could not be downloaded).
+
+### index_wait
+
+Wait until a running indexing run finishes (or the timeout passes).
+
+This tool is only available when `FRONTMATTER_ENABLE_SEMANTIC=true`.
+
+| Parameter | Type   | Description                        |
+| --------- | ------ | ---------------------------------- |
+| `timeout` | number | Maximum seconds to wait (default 60) |
+
+**Example:**
+
+```json
+// Output
+{ "success": true, "state": "ready", "has_index": true, "last_run": { "indexed": 3, "removed": 0, "failed": 0, "error": null } }
+```
+
+`success` is false when the timeout passed while indexing was still running.
 
 ### index_refresh
 
@@ -330,6 +355,14 @@ This tool is only available when `FRONTMATTER_ENABLE_SEMANTIC=true`.
 ```
 
 ## Technical Notes
+
+### Warnings
+
+Tools that read or write many files report per-file problems instead of failing: `"warnings": [{ "path": "notes/a.md", "error": "..." }]` (malformed frontmatter, a property that is not an array, a frontmatter key named `path`, which is reserved for the file path). SQL errors fail the call and list the columns of the `files` table.
+
+### Array Operations
+
+`batch_array_remove` and `batch_array_replace` act on every occurrence of the value. `batch_array_sort` skips (with a warning) arrays whose values can't be compared.
 
 ### All Values Are Strings
 

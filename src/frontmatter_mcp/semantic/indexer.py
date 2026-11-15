@@ -1,4 +1,4 @@
-"""Embedding indexer module for background embedding generation."""
+"""Background indexing: chunk changed files, embed the chunks, store them."""
 
 import logging
 import threading
@@ -7,9 +7,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Callable
 
-from frontmatter_mcp.semantic.cache import EmbeddingCache
 from frontmatter_mcp.semantic.chunking import Chunk, chunk_markdown
-from frontmatter_mcp.semantic.model import EmbeddingModel
+from frontmatter_mcp.semantic.models import EmbeddingModel
+from frontmatter_mcp.semantic.store import ChunkStore
 
 logger = logging.getLogger(__name__)
 
@@ -43,12 +43,12 @@ class IndexRunStats:
         }
 
 
-class EmbeddingIndexer:
-    """Background indexer for document embeddings."""
+class ChunkIndexer:
+    """Keeps the chunk store in step with the Markdown files, in a background thread."""
 
     def __init__(
         self,
-        cache: EmbeddingCache,
+        store: ChunkStore,
         model: EmbeddingModel,
         get_files: Callable[[], list[Path]],
         base_dir: Path,
@@ -56,12 +56,12 @@ class EmbeddingIndexer:
         """Initialize the indexer.
 
         Args:
-            cache: Embedding cache instance.
+            store: Where chunks and vectors are kept.
             model: Embedding model instance.
             get_files: Callable that returns list of files to index.
             base_dir: Base directory for relative path calculation.
         """
-        self._cache = cache
+        self._store = store
         self._model = model
         self._get_files = get_files
         self._base_dir = base_dir
@@ -130,14 +130,14 @@ class EmbeddingIndexer:
         stats = IndexRunStats()
         try:
             self._index_files(files, stats)
-            self._cache.compact_if_needed()
+            self._store.compact_if_needed()
         except Exception as e:
             # The previous index stays usable; report why this run stopped
             stats.error = f"{type(e).__name__}: {e}"
             logger.exception("indexing failed")
         finally:
             try:
-                self._cache.close()
+                self._store.close()
             finally:
                 with self._lock:
                     self._state = IndexerState.READY
@@ -154,10 +154,10 @@ class EmbeddingIndexer:
             except (ValueError, OSError):
                 continue
 
-        stale_paths = self._cache.get_stale_paths(current_files)
-        deleted_paths = self._cache.get_deleted_paths(current_files)
+        stale_paths = self._store.stale_paths(current_files)
+        deleted_paths = self._store.deleted_paths(current_files)
         for path in deleted_paths:
-            self._cache.delete(path)
+            self._store.delete_file(path)
         stats.removed = len(deleted_paths)
 
         # Encode chunks of several files per model call (batching is much
@@ -189,7 +189,7 @@ class EmbeddingIndexer:
             end = offset + len(chunks)
             entries.append((rel_path, mtime, chunks, vectors[offset:end]))
             offset += len(chunks)
-        self._cache.set_files(entries)
+        self._store.replace_files(entries)
         stats.indexed += len(entries)
 
     def _get_chunks(self, file_path: Path) -> list[Chunk] | None:
