@@ -33,6 +33,10 @@ mcp = FastMCP("frontmatter-mcp")
 # mcp 1.x and read_only_hint in 2.x, and the camelCase alias works in both
 READ_ONLY = {"readOnlyHint": True}
 
+# How long search waits for an indexing run it started. The first full index of
+# a large vault can take longer; search then uses what is indexed so far.
+INDEX_WAIT_SECONDS = 60.0
+
 
 def _collect_files(base_dir: Path, glob_pattern: str) -> list[Path]:
     """Collect files matching the glob pattern, limited to base_dir.
@@ -171,8 +175,11 @@ def query(
     conn = create_base_connection(records)
 
     # Add semantic search columns if enabled and ready
-    if semantic_ctx is not None and semantic_ctx.is_ready:
-        add_semantic_columns(conn, semantic_ctx)
+    if semantic_ctx is not None:
+        if "embed" in sql.lower():
+            semantic_ctx.ensure_index(wait_seconds=INDEX_WAIT_SECONDS)
+        if semantic_ctx.is_ready:
+            add_semantic_columns(conn, semantic_ctx)
 
     query_result = execute_query(conn, sql)
 
@@ -217,9 +224,12 @@ def search(
 
     Returns:
         Dict with results (path, line, heading, text, score; best first) and
-        index_state. Scores are only comparable within one search.
+        index_state. Scores are only comparable within one search. The first
+        search in a session brings the index up to date (usually seconds); if
+        index_state is still "indexing", results cover what is indexed so far.
     """
     assert semantic_ctx is not None
+    semantic_ctx.ensure_index(wait_seconds=INDEX_WAIT_SECONDS)
     limit = max(1, min(limit, MAX_SEARCH_LIMIT))
     base_dir = settings.base_dir
     paths = _collect_files(base_dir, glob)
@@ -752,7 +762,8 @@ def main() -> None:
     if settings.enable_semantic:
         semantic_ctx = get_semantic_ctx()
         if semantic_ctx is not None:
-            semantic_ctx.indexer.start()
+            # Indexing starts on the first semantic call, not here, so sessions
+            # that never search don't load the model
             mcp.enable(tags={"semantic"})
 
     mcp.run()

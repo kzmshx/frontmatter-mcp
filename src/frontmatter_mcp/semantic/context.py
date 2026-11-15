@@ -28,6 +28,13 @@ class SemanticContext:
         """Check if indexing is complete and ready for semantic search."""
         return self.indexer.state == IndexerState.READY
 
+    def ensure_index(self, wait_seconds: float = 0.0) -> None:
+        """Start indexing if it has never run, and wait up to wait_seconds."""
+        if self.indexer.state == IndexerState.IDLE:
+            self.indexer.start()
+        if wait_seconds > 0:
+            self.indexer.wait(timeout=wait_seconds)
+
     def search_index(self) -> SearchIndex | None:
         """In-memory search index, reloaded after each indexing run.
 

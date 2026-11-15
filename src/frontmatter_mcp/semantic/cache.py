@@ -1,10 +1,13 @@
 """Cache module for chunk embeddings using DuckDB."""
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import duckdb
 import numpy as np
+import pyarrow as pa
 from numpy.typing import NDArray
 
 from frontmatter_mcp.semantic.chunking import Chunk
@@ -80,20 +83,32 @@ class EmbeddingCache:
             "document_prefix": getattr(self._model, "document_prefix", ""),
         }
 
+    def _remove_files(self) -> None:
+        for path in (self.cache_path, Path(f"{self.cache_path}.wal")):
+            path.unlink(missing_ok=True)
+
     def _connect(self) -> None:
-        """Connect, and rebuild the tables if they were made for another setup."""
+        """Connect, starting a fresh file if the cache was made for another setup.
+
+        Deleting the file (rather than dropping tables) matters: DuckDB does not
+        shrink a database file, so dropped data would keep taking disk space.
+        """
         self._cache_dir.mkdir(parents=True, exist_ok=True)
-        self._conn = duckdb.connect(str(self.cache_path))
-        self._conn.execute(
-            "CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT)"
-        )
-        stored = dict(self._conn.execute("SELECT key, value FROM metadata").fetchall())
         expected = self._expected_metadata()
-        if stored != expected:
-            self._conn.execute("DROP TABLE IF EXISTS embeddings")  # schema v1
-            self._conn.execute("DROP TABLE IF EXISTS chunks")
-            self._conn.execute("DROP TABLE IF EXISTS files")
-            self._conn.execute("DELETE FROM metadata")
+        self._conn = duckdb.connect(str(self.cache_path))
+        try:
+            stored = dict(
+                self._conn.execute("SELECT key, value FROM metadata").fetchall()
+            )
+        except duckdb.CatalogException:
+            stored = {}
+        if any(stored.get(k) != v for k, v in expected.items()):
+            self._conn.close()
+            self._remove_files()
+            self._conn = duckdb.connect(str(self.cache_path))
+            self._conn.execute(
+                "CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT)"
+            )
             self._conn.executemany(
                 "INSERT INTO metadata (key, value) VALUES (?, ?)",
                 list(expected.items()),
@@ -201,23 +216,30 @@ class EmbeddingCache:
             return None
         try:
             with duckdb.connect(str(self.cache_path), read_only=True) as conn:
-                rows = conn.execute(
+                relation: Any = conn.sql(
                     "SELECT path, line, heading, text, vector FROM chunks "
                     "ORDER BY path, idx"
-                ).fetchall()
+                )
+                # DuckDB 2 has to_arrow_table; 1.x has arrow()
+                to_arrow = getattr(relation, "to_arrow_table", None) or relation.arrow
+                table = to_arrow()
+                if isinstance(table, pa.RecordBatchReader):
+                    table = table.read_all()
         except _READONLY_ERRORS:
             return None
         dim = self._model.get_dimension()
+        # Read the vectors straight into one float32 array; going through Python
+        # lists would create a float object per number (hundreds of MB)
+        vector_column = table.column("vector").combine_chunks()
+        if isinstance(vector_column, pa.ChunkedArray):
+            vector_column = vector_column.combine_chunks()
+        flat = vector_column.flatten().to_numpy(zero_copy_only=False)
         return ChunkRows(
-            paths=[r[0] for r in rows],
-            lines=np.array([r[1] for r in rows], dtype=np.int64),
-            headings=[r[2] for r in rows],
-            texts=[r[3] for r in rows],
-            vectors=(
-                np.array([r[4] for r in rows], dtype=np.float32)
-                if rows
-                else np.zeros((0, dim), dtype=np.float32)
-            ),
+            paths=table.column("path").to_pylist(),
+            lines=table.column("line").to_numpy(zero_copy_only=False).astype(np.int64),
+            headings=table.column("heading").to_pylist(),
+            texts=table.column("text").to_pylist(),
+            vectors=np.ascontiguousarray(flat, dtype=np.float32).reshape(-1, dim),
         )
 
     def get_all_readonly(self) -> dict[str, np.ndarray]:
@@ -238,6 +260,53 @@ class EmbeddingCache:
             norm = float(np.linalg.norm(mean))
             result[path] = mean / norm if norm else mean
         return result
+
+    def compact_if_needed(
+        self, growth: float = 1.25, min_growth_bytes: int = 8 * 2**20
+    ) -> bool:
+        """Rewrite the database file once it has grown well past its compact size.
+
+        Replacing a file's chunks leaves partly used and free blocks behind;
+        DuckDB reuses some of them but never shrinks the file. Copying the
+        live data into a new file brings it back to its compact size, which is
+        remembered for the next check.
+
+        Args:
+            growth: Rewrite when the file is larger than this many times the
+                size it had right after the last rewrite...
+            min_growth_bytes: ...and at least this many bytes larger, so small
+                caches are not rewritten over a few blocks.
+
+        Returns:
+            True if the file was rewritten.
+        """
+        self.conn.execute("CHECKPOINT")
+        size = self.cache_path.stat().st_size
+        row = self.conn.execute(
+            "SELECT value FROM metadata WHERE key = 'compact_size'"
+        ).fetchone()
+        if row is not None:
+            base = int(row[0])
+            if size <= base * growth or size - base < min_growth_bytes:
+                return False
+
+        compact = self.cache_path.with_name(self.cache_path.name + ".compact")
+        compact.unlink(missing_ok=True)
+        name = self.conn.execute("SELECT current_database()").fetchone()
+        assert name is not None
+        self.conn.execute(f"ATTACH '{compact}' AS compact_target")
+        self.conn.execute(f'COPY FROM DATABASE "{name[0]}" TO compact_target')
+        self.conn.execute("DETACH compact_target")
+        self.close()
+        os.replace(compact, self.cache_path)
+        Path(f"{self.cache_path}.wal").unlink(missing_ok=True)
+
+        self.conn.execute(
+            "INSERT OR REPLACE INTO metadata (key, value) VALUES ('compact_size', ?)",
+            [str(self.cache_path.stat().st_size)],
+        )
+        self.conn.execute("CHECKPOINT")
+        return True
 
     def close(self) -> None:
         """Close the database connection."""

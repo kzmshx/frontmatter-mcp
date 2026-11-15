@@ -42,7 +42,9 @@ Alternatives measured on the same 16 queries (target ranked first / in top 5):
 
 ## Consequences
 
-- The cache schema changes (files and chunks tables); existing caches are rebuilt on the next start. Indexing the 1,900-file vault takes about 90 seconds on an M-series Mac
+- The cache schema changes (files and chunks tables); existing caches are replaced by a new file on the next start. Indexing the 1,900-file vault takes about 90 seconds on an M-series Mac
+- The cache file is about 35 MB (the old whole-document cache had grown to 118 MB). DuckDB never shrinks a file, so after indexing it is rewritten once it is 25% (and 8 MB) larger than after its last rewrite
+- sentence-transformers, scipy and scikit-learn are imported lazily and indexing starts on the first semantic call. A server that never searches stays at about 110 MB instead of about 470 MB (importing torch); after the first search it uses about 1.1 GB
 - The reranker model is downloaded on the first search and adds about 0.3 seconds per query; `FRONTMATTER_RERANKER_MODEL=""` turns it off
 - scikit-learn and scipy become direct dependencies of the `semantic` extra (they were already installed through sentence-transformers)
 - The `vss` extension is no longer installed; `array_cosine_similarity` is built into DuckDB

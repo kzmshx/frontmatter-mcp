@@ -142,3 +142,60 @@ class TestEmbeddingCache:
         assert "embeddings" not in tables
         assert {"files", "chunks", "metadata"} <= tables
         cache.close()
+
+
+class TestCacheDiskSpace:
+    """The cache file does not keep growing with dead data."""
+
+    def test_compact_after_many_replacements(self, tmp_path: Path) -> None:
+        cache = EmbeddingCache(tmp_path / "c", model=create_mock_model(dimension=256))
+        many = [Chunk(line=i, heading="", text="x" * 300) for i in range(50)]
+        big = np.random.rand(50, 256).astype(np.float32)
+        for round_ in range(2):
+            for f in range(40):
+                cache.set_file(f"{f}.md", float(round_), many, big)
+            cache.conn.execute("CHECKPOINT")
+        before = cache.cache_path.stat().st_size
+
+        assert cache.compact_if_needed(min_growth_bytes=0)
+        after = cache.cache_path.stat().st_size
+        assert after < before
+        assert cache.count() == 40
+        assert cache.chunk_count() == 40 * 50
+        cache.close()
+
+    def test_no_compaction_until_file_grows(self, tmp_path: Path) -> None:
+        cache = EmbeddingCache(tmp_path / "c", model=create_mock_model())
+        cache.set_file("a.md", 1.0, chunks("x"), vectors(1))
+        assert cache.compact_if_needed()  # first run records the compact size
+        assert not cache.compact_if_needed()
+        cache.close()
+
+    def test_compact_size_does_not_trigger_rebuild(self, tmp_path: Path) -> None:
+        cache = EmbeddingCache(tmp_path / "c", model=create_mock_model())
+        cache.set_file("a.md", 1.0, chunks("x"), vectors(1))
+        cache.compact_if_needed()
+        cache.close()
+        reopened = EmbeddingCache(tmp_path / "c", model=create_mock_model())
+        assert reopened.count() == 1
+        reopened.close()
+
+    def test_mismatch_starts_a_new_file(self, tmp_path: Path) -> None:
+        cache_dir = tmp_path / "c"
+        model_a = create_mock_model(name="a", dimension=256)
+        first = EmbeddingCache(cache_dir, model=model_a)
+        many = [Chunk(line=i, heading="", text="x" * 300) for i in range(50)]
+        big = np.random.rand(50, 256).astype(np.float32)
+        for f in range(40):
+            first.set_file(f"{f}.md", 1.0, many, big)
+        first.conn.execute("CHECKPOINT")
+        first.close()
+        big = (cache_dir / CACHE_DB_NAME).stat().st_size
+
+        model_b = create_mock_model(name="b", dimension=256)
+        second = EmbeddingCache(cache_dir, model=model_b)
+        one = np.random.rand(1, 256).astype(np.float32)
+        second.set_file("a.md", 1.0, chunks("x"), one)
+        second.conn.execute("CHECKPOINT")
+        assert (cache_dir / CACHE_DB_NAME).stat().st_size < big
+        second.close()

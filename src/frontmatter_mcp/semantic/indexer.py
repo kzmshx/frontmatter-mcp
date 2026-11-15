@@ -98,6 +98,9 @@ class EmbeddingIndexer:
         """
         try:
             self._index_files(files)
+            self._cache.compact_if_needed()
+        except Exception:
+            pass  # a failed run leaves the previous index usable
         finally:
             self._cache.close()
             with self._lock:

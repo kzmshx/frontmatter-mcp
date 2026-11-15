@@ -1,6 +1,7 @@
 """Tests for MCP server module."""
 
 import datetime
+import os
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -757,6 +758,35 @@ class TestSemanticSearchTools:
             query="ダーツ 苛立", where="date > '2025-11-25'", **_query_deps()
         )
         assert [r["path"] for r in filtered["results"]] == ["tea.md"]
+
+    def test_search_starts_indexing_on_first_use(
+        self, semantic_base_dir: Path, mock_semantic_context
+    ) -> None:
+        """The server does not index at startup; the first search does."""
+        (semantic_base_dir / "note.md").write_text(
+            "---\ndate: 2025-11-20\n---\n煎り番茶を淹れて冷やしてみたら美味しかった。\n"
+        )
+        assert mock_semantic_context.indexer.state.value == "idle"
+        result = server_module.search(query="煎り番茶", **_query_deps())
+        assert result["index_state"] == "ready"
+        assert result["results"][0]["path"] == "note.md"
+
+    def test_server_import_does_not_load_torch(self, semantic_base_dir: Path) -> None:
+        """Sessions that never search should not pay for torch."""
+        import subprocess
+        import sys
+
+        code = (
+            "import sys, frontmatter_mcp.server; "
+            "print('torch' in sys.modules or 'sklearn' in sys.modules)"
+        )
+        out = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+            env=dict(os.environ) | {"FRONTMATTER_BASE_DIR": str(semantic_base_dir)},
+        )
+        assert out.stdout.strip() == "False"
 
     def test_query_inspect_includes_embedding(
         self, semantic_base_dir: Path, mock_semantic_context

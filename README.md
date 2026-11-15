@@ -356,7 +356,7 @@ Files containing Obsidian Templater expressions (e.g., `<% tp.date.now("YYYY-MM-
 
 ### Semantic Search
 
-Each file's body is split into chunks of about 400 characters at headings and line breaks, and each chunk is embedded. The index is built in the background at startup and updated by `index_refresh` (only files whose mtime changed). Dot directories such as `.obsidian` are skipped.
+Each file's body is split into chunks of about 400 characters at headings and line breaks, and each chunk is embedded. Indexing starts on the first semantic call (`search`, a `query` using `embed()`, or `index_refresh`), not at server startup, and only re-reads files whose mtime changed. Dot directories such as `.obsidian` are skipped.
 
 The `search` tool combines three signals:
 
@@ -389,6 +389,17 @@ Environment variables:
 | FRONTMATTER_CACHE_DIR                 | FRONTMATTER_BASE_DIR/.frontmatter-mcp   | Cache directory for embeddings                      |
 
 Changing the model or the document prefix, or upgrading from a version before chunked indexing, rebuilds the cache on the next start.
+
+Resource use, measured on a 1,900-file vault (27,700 chunks) on an M-series Mac:
+
+| | |
+| :- | :- |
+| Server memory before any semantic call | about 110 MB (torch and the models are loaded on first use) |
+| Memory after the first search | about 1.1 GB (torch, both models, vectors, BM25 index) |
+| First full index | about 90 s; later runs only re-index changed files (300 files: about 15 s) |
+| One search | about 0.4 s (retrieval about 10 ms, rerank about 0.3 s); the first search also loads the models (a few seconds) |
+| Cache file | about 35 MB; rewritten after indexing once it grows 25% (and 8 MB) past its compact size |
+| Model downloads (Hugging Face cache) | about 150 MB each for the embedding model and the reranker |
 
 ## License
 

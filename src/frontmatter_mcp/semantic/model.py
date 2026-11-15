@@ -1,10 +1,12 @@
 """Embedding model module for semantic search."""
 
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 from numpy.typing import NDArray
-from sentence_transformers import SentenceTransformer
+
+if TYPE_CHECKING:
+    from sentence_transformers import SentenceTransformer
 
 # ruri-v3 is trained with task prefixes; retrieval uses these two
 RURI_V3_QUERY_PREFIX = "検索クエリ: "
@@ -35,7 +37,7 @@ class EmbeddingModel:
             document_prefix: Prefix for indexed text. None picks the model's default.
         """
         self._name = name
-        self._model: SentenceTransformer | None = None
+        self._model: "SentenceTransformer | None" = None
         default_query, default_document = default_prefixes(name)
         self.query_prefix = default_query if query_prefix is None else query_prefix
         self.document_prefix = (
@@ -48,7 +50,7 @@ class EmbeddingModel:
         return self._name
 
     @property
-    def model(self) -> SentenceTransformer:
+    def model(self) -> "SentenceTransformer":
         """Get the model, loading it if necessary."""
         if self._model is None:
             self._load_model()
@@ -56,7 +58,14 @@ class EmbeddingModel:
         return self._model
 
     def _load_model(self) -> None:
-        """Load the sentence-transformers model."""
+        """Load the sentence-transformers model.
+
+        Imported here, not at module level: importing sentence-transformers
+        loads torch (several hundred MB), which a server that never runs a
+        semantic search should not pay for.
+        """
+        from sentence_transformers import SentenceTransformer
+
         self._model = SentenceTransformer(self._name)
 
     @property

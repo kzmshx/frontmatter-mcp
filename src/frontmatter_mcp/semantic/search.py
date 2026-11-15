@@ -24,8 +24,6 @@ from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy import sparse
-from sklearn.feature_extraction.text import CountVectorizer
 
 from frontmatter_mcp.semantic.cache import ChunkRows
 
@@ -39,6 +37,9 @@ RRF_WEIGHTS = (1.0, 0.5)  # dense, lexical
 # BM25 parameters
 BM25_K1 = 1.2
 BM25_B = 0.75
+# Bigrams are hashed into this many columns. Hashing avoids keeping a
+# vocabulary dict of every bigram in memory; collisions at this size are rare
+BIGRAM_FEATURES = 2**20
 # Longest chunk text returned to the caller
 MAX_RESULT_CHARS = 800
 
@@ -51,13 +52,23 @@ class Bm25Index:
     """BM25 over character bigrams of each chunk."""
 
     def __init__(self, texts: list[str]) -> None:
-        self._vectorizer = CountVectorizer(
-            analyzer="char", ngram_range=(2, 2), preprocessor=_normalize
+        # Imported lazily so the server starts without scipy / scikit-learn
+        from scipy import sparse
+        from sklearn.feature_extraction.text import HashingVectorizer
+
+        self._vectorizer = HashingVectorizer(
+            analyzer="char",
+            ngram_range=(2, 2),
+            preprocessor=_normalize,
+            n_features=BIGRAM_FEATURES,
+            alternate_sign=False,
+            norm=None,
+            dtype=np.float32,
         )
         if texts:
-            tf = self._vectorizer.fit_transform(texts).astype(np.float32)
+            tf = self._vectorizer.transform(texts)
         else:
-            tf = sparse.csr_matrix((0, 0), dtype=np.float32)
+            tf = sparse.csr_matrix((0, BIGRAM_FEATURES), dtype=np.float32)
         self._tf = sparse.csc_matrix(tf)
         n = self._tf.shape[0]
         lengths = np.asarray(self._tf.sum(axis=1)).ravel()
