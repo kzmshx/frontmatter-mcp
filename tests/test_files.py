@@ -3,11 +3,15 @@
 from datetime import date
 from pathlib import Path
 
+import frontmatter
+import pytest
+
 from frontmatter_mcp.files import (
     FileRecordCache,
     parse_file,
     parse_files,
     update_file,
+    write_post,
 )
 
 
@@ -200,6 +204,59 @@ Some paragraph.
         assert "# Heading" in content
         assert "Some paragraph." in content
         assert "- List item" in content
+
+
+class TestWritePost:
+    """Tests for write_post function."""
+
+    def test_failure_leaves_original_intact(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A serialization error does not truncate the original file."""
+        md_file = tmp_path / "test.md"
+        original = "---\ntitle: Test\n---\n# Body\n"
+        md_file.write_text(original)
+
+        def broken_dumps(*args: object, **kwargs: object) -> str:
+            raise TypeError("boom")
+
+        monkeypatch.setattr(frontmatter, "dumps", broken_dumps)
+        with pytest.raises(TypeError):
+            update_file(md_file, tmp_path, {"status": "done"})
+
+        assert md_file.read_text() == original
+        assert list(tmp_path.iterdir()) == [md_file]
+
+    def test_preserves_key_order(self, tmp_path: Path) -> None:
+        """Existing keys keep their order and new keys are appended."""
+        md_file = tmp_path / "test.md"
+        md_file.write_text("---\ndate: 2025-11-01\nweek: w\nday: Sat\n---\nBody\n")
+
+        update_file(md_file, tmp_path, {"tags": ["a"]})
+
+        lines = md_file.read_text().splitlines()
+        keys = [line.split(":")[0] for line in lines[1 : lines.index("---", 1)]]
+        top_level = [k for k in keys if not k.startswith("-")]
+        assert top_level == ["date", "week", "day", "tags"]
+
+    def test_ends_with_newline(self, tmp_path: Path) -> None:
+        """The written file ends with a single newline."""
+        md_file = tmp_path / "test.md"
+        md_file.write_text("---\ntitle: Test\n---\nBody\n")
+
+        update_file(md_file, tmp_path, {"status": "done"})
+
+        assert md_file.read_text().endswith("Body\n")
+
+    def test_preserves_file_mode(self, tmp_path: Path) -> None:
+        """The permission bits of the original file are kept."""
+        md_file = tmp_path / "test.md"
+        md_file.write_text("---\ntitle: Test\n---\nBody\n")
+        md_file.chmod(0o644)
+
+        write_post(md_file, frontmatter.load(md_file))
+
+        assert md_file.stat().st_mode & 0o777 == 0o644
 
 
 class TestFrontmatterCache:

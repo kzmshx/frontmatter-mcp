@@ -14,9 +14,11 @@ jobs:
       - uses: astral-sh/ruff-action@v3
         with:
           args: check
+          src: ./src ./tests
       - uses: astral-sh/ruff-action@v3
         with:
           args: format --check
+          src: ./src ./tests
 
   typecheck:
     runs-on: ubuntu-latest

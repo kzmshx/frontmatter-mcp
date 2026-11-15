@@ -1,5 +1,7 @@
 """Frontmatter read/write module."""
 
+import os
+import tempfile
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -107,6 +109,31 @@ def parse_files(
     return records, warnings
 
 
+def write_post(path: Path, post: frontmatter.Post) -> None:
+    """Write a post back to its file without risking data loss.
+
+    The new content is written to a temporary file in the same directory and
+    then atomically renamed over the original, so a failure while serializing
+    or writing leaves the original file untouched. Key order is preserved and
+    the file ends with a newline.
+
+    Args:
+        path: Absolute path to the file.
+        post: Post to write.
+    """
+    text = frontmatter.dumps(post, sort_keys=False) + "\n"
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
+            f.write(text)
+        if path.exists():
+            os.chmod(tmp, path.stat().st_mode & 0o7777)
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+
+
 def update_file(
     path: Path,
     base_dir: Path,
@@ -141,8 +168,7 @@ def update_file(
 
     # Only write if there were changes
     if set_values or unset:
-        with open(path, "wb") as f:
-            frontmatter.dump(post, f)
+        write_post(path, post)
 
     return {
         "path": str(path.relative_to(base_dir)),
