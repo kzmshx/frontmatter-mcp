@@ -146,6 +146,55 @@ class TestQuery:
         assert result["results"][0]["tag"] == "python"
         assert result["results"][0]["count"] == 2
 
+    def test_cannot_read_files_outside_base_dir(
+        self, temp_base_dir: Path, tmp_path_factory: pytest.TempPathFactory
+    ) -> None:
+        """SQL cannot read arbitrary files."""
+        secret = tmp_path_factory.mktemp("outside") / "secret.txt"
+        secret.write_text("secret")
+        with pytest.raises(Exception, match="Permission Error"):
+            server_module.query.fn(
+                glob="**/*.md",
+                sql=f"SELECT * FROM read_text('{secret}')",
+                **_query_deps(),
+            )
+
+    def test_cannot_write_files(
+        self, temp_base_dir: Path, tmp_path_factory: pytest.TempPathFactory
+    ) -> None:
+        """SQL cannot write files with COPY ... TO."""
+        target = tmp_path_factory.mktemp("outside") / "out.csv"
+        with pytest.raises(Exception, match="Permission Error"):
+            server_module.query.fn(
+                glob="**/*.md",
+                sql=f"COPY (SELECT path FROM files) TO '{target}'",
+                **_query_deps(),
+            )
+        assert not target.exists()
+
+    def test_cannot_reenable_external_access(self, temp_base_dir: Path) -> None:
+        """SQL cannot lift the restriction."""
+        with pytest.raises(Exception, match="Cannot change configuration"):
+            server_module.query.fn(
+                glob="**/*.md",
+                sql="SET enable_external_access = true",
+                **_query_deps(),
+            )
+
+    def test_glob_cannot_escape_base_dir(self, temp_base_dir: Path) -> None:
+        """A glob with .. does not match files outside base_dir."""
+        outside = temp_base_dir.parent / f"{temp_base_dir.name}-outside.md"
+        outside.write_text("---\ntitle: outside\n---\n")
+        try:
+            result = server_module.query.fn(
+                glob=f"../{outside.name}",
+                sql="SELECT path FROM files",
+                **_query_deps(),
+            )
+            assert result["row_count"] == 0
+        finally:
+            outside.unlink()
+
 
 class TestUpdate:
     """Tests for update tool."""

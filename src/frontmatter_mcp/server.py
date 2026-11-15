@@ -30,10 +30,18 @@ mcp = FastMCP("frontmatter-mcp")
 
 
 def _collect_files(base_dir: Path, glob_pattern: str) -> list[Path]:
-    """Collect files matching the glob pattern."""
+    """Collect files matching the glob pattern, limited to base_dir.
+
+    Matches that resolve outside base_dir (via "..", an absolute pattern, or a
+    symlink) are dropped.
+    """
     pattern = str(base_dir / glob_pattern)
     matches = globmodule.glob(pattern, recursive=True)
-    return [Path(p) for p in matches if Path(p).is_file()]
+    return [
+        Path(p)
+        for p in matches
+        if Path(p).is_file() and Path(p).resolve().is_relative_to(base_dir)
+    ]
 
 
 def _build_response(
