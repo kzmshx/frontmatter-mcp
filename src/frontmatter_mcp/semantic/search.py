@@ -6,7 +6,9 @@ Pipeline for one query:
    (ruri-v3 with its query/document prefixes). A document scores as its best chunk.
 2. Lexical: BM25 over character bigrams. Bigrams need no Japanese tokenizer and
    catch exact names and phrases that embeddings blur.
-3. Candidates: the top documents from each list, merged.
+3. Candidates: the top documents from each list, merged. Chunks whose text
+   repeats across many documents (template sections such as a daily checklist)
+   and chunks under excluded sections never become candidates.
 4. Rerank: a cross-encoder scores (query, chunk) for the best chunks of each
    candidate. Without a reranker, the two lists are fused with weighted
    reciprocal rank fusion instead.
@@ -14,9 +16,12 @@ Pipeline for one query:
 See ADR 0012 for the measurements behind this design.
 """
 
+import re
 import threading
 import unicodedata
-from dataclasses import dataclass
+from collections import defaultdict
+from collections.abc import Sequence
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -40,10 +45,33 @@ BM25_B = 0.75
 BIGRAM_FEATURES = 2**20
 # Longest chunk text returned to the caller
 MAX_RESULT_CHARS = 800
+# A chunk whose text (ignoring checkbox state, numbers and whitespace) appears
+# in at least this many documents is template text, not something to return
+REPEATED_MIN_DOCUMENTS = 10
+_VOLATILE = re.compile(r"\[[ xX]\]|[\d\s]+")
 
 
 def _normalize(text: str) -> str:
     return unicodedata.normalize("NFKC", text).lower()
+
+
+def repeated_chunks(paths: Sequence[str], texts: Sequence[str]) -> NDArray[np.bool_]:
+    """Mark chunks whose text recurs in REPEATED_MIN_DOCUMENTS documents or more.
+
+    Checkbox state, numbers and whitespace are ignored, so a daily template's
+    checklist matches across days whatever was ticked or counted.
+    """
+    # No Unicode normalization: template text is copied verbatim, and NFKC
+    # would double the cost (about 0.2 s for 26,000 chunks without it)
+    keys = [_VOLATILE.sub("", t) for t in texts]
+    documents: defaultdict[str, set[str]] = defaultdict(set)
+    for key, path in zip(keys, paths, strict=True):
+        documents[key].add(path)
+    return np.fromiter(
+        (len(documents[k]) >= REPEATED_MIN_DOCUMENTS for k in keys),
+        dtype=bool,
+        count=len(keys),
+    )
 
 
 class Bm25Index:
@@ -102,6 +130,7 @@ class SearchHit:
     heading: str
     text: str
     score: float
+    section: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         text = self.text
@@ -111,6 +140,7 @@ class SearchHit:
             "path": self.path,
             "line": self.line,
             "heading": self.heading,
+            "section": self.section,
             "text": text,
             "score": round(self.score, 4),
         }
@@ -133,6 +163,7 @@ class SearchIndex:
                 headings=[rows.headings[i] for i in order],
                 texts=[rows.texts[i] for i in order],
                 vectors=rows.vectors[order],
+                sections=[rows.sections[i] for i in order],
             )
         self.rows = rows
         paths = rows.paths
@@ -143,6 +174,7 @@ class SearchIndex:
         self._doc_of_chunk = np.repeat(
             np.arange(len(starts)), self._doc_ends - self._doc_starts
         )
+        self._searchable = ~repeated_chunks(rows.paths, rows.texts)
         self._bm25: Bm25Index | None = None
         self._doc_vectors: dict[str, NDArray[np.float32]] | None = None
         self._lock = threading.Lock()
@@ -191,8 +223,14 @@ class SearchIndex:
         limit: int,
         allowed_paths: set[str] | None = None,
         reranker: Scorer | None = None,
+        exclude_sections: Sequence[str] = (),
     ) -> list[SearchHit]:
-        """Run the hybrid pipeline described in the module docstring."""
+        """Run the hybrid pipeline described in the module docstring.
+
+        Args:
+            exclude_sections: Headings whose chunks are skipped, at any level
+                of a chunk's section (e.g. a recurring "AI comments" heading).
+        """
         if not len(self.rows):
             return []
         if allowed_paths is None:
@@ -206,8 +244,20 @@ class SearchIndex:
         if not doc_mask.any():
             return []
 
-        dense_scores = self.rows.vectors @ query_vector
-        lexical_scores = self.bm25.scores(query)
+        chunk_mask = self._searchable
+        if exclude_sections:
+            excluded = set(exclude_sections)
+            chunk_mask = chunk_mask & np.fromiter(
+                (excluded.isdisjoint(s) for s in self.rows.sections),
+                dtype=bool,
+                count=len(self.rows),
+            )
+        dense_scores = np.where(
+            chunk_mask, self.rows.vectors @ query_vector, -np.inf
+        ).astype(np.float32)
+        lexical_scores = np.where(chunk_mask, self.bm25.scores(query), 0).astype(
+            np.float32
+        )
         pool = max(CANDIDATES_PER_LIST, limit)
         dense = self._rank_documents(dense_scores, doc_mask, pool)
         doc_lexical = np.maximum.reduceat(lexical_scores, self._doc_starts)
@@ -221,10 +271,13 @@ class SearchIndex:
         for d in dict.fromkeys(d for d, _ in dense + lexical):
             start, end = int(self._doc_starts[d]), int(self._doc_ends[d])
             order = np.argsort(-dense_scores[start:end])[:CHUNKS_PER_CANDIDATE]
-            by_dense = start + order
+            by_dense = [int(i) for i in start + order if chunk_mask[i]]
             by_lexical = start + int(np.argmax(lexical_scores[start:end]))
-            chosen = dict.fromkeys([*map(int, by_dense), by_lexical])
-            pairs.extend((d, i) for i in chosen)
+            if chunk_mask[by_lexical]:
+                by_dense.append(by_lexical)
+            pairs.extend((d, i) for i in dict.fromkeys(by_dense))
+        if not pairs:
+            return []
         scores = reranker.score(query, [self.rows.texts[i] for _, i in pairs])
         best_by_doc: dict[int, tuple[float, int]] = {}
         for (d, i), score in zip(pairs, scores, strict=True):
@@ -257,4 +310,5 @@ class SearchIndex:
             heading=self.rows.headings[i],
             text=self.rows.texts[i],
             score=score,
+            section=list(self.rows.sections[i]),
         )

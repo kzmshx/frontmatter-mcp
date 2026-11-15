@@ -74,6 +74,18 @@ class TestChunkStore:
         assert rows.lines.tolist() == [1, 2]
         np.testing.assert_allclose(rows.vectors, v, rtol=1e-6)
 
+    def test_sections_round_trip(self, cache: ChunkStore) -> None:
+        from frontmatter_mcp.semantic.chunking import Chunk
+
+        parts = [
+            Chunk(line=3, heading="Sleep", text="t1", section=("Day", "Sleep")),
+            Chunk(line=9, heading="", text="t2"),
+        ]
+        cache.replace_files([("a.md", 1000.0, parts, vectors(2))])
+        rows = cache.load_chunks()
+        assert rows is not None
+        assert rows.sections == [["Day", "Sleep"], []]
+
     def test_set_file_replaces_chunks(self, cache: ChunkStore) -> None:
         cache.replace_files([("a.md", 1000.0, chunks("old1", "old2"), vectors(2))])
         cache.replace_files([("a.md", 2000.0, chunks("new"), vectors(1))])

@@ -59,6 +59,7 @@ class SearchHitResult(TypedDict):
     path: str
     line: int
     heading: str
+    section: list[str]
     text: str
     score: float
 

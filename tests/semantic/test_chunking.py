@@ -61,3 +61,24 @@ def test_hashes_inside_code_fences_are_not_headings() -> None:
 
 def test_closing_hashes_are_stripped() -> None:
     assert chunk_markdown(f"## Title ##\n{LONG}")[0].heading == "Title"
+
+
+def test_section_is_the_heading_path() -> None:
+    text = f"# Day\n## Notes\n### Sleep\n{LONG}\n## Log\n{LONG}\n"
+    chunks = chunk_markdown(text)
+    assert [c.section for c in chunks] == [("Day", "Notes", "Sleep"), ("Day", "Log")]
+    assert [c.heading for c in chunks] == ["Sleep", "Log"]
+
+
+def test_chunk_without_heading_has_empty_section() -> None:
+    assert chunk_markdown(f"{LONG}\n")[0].section == ()
+
+
+def test_chunks_of_only_embeds_or_links_are_dropped() -> None:
+    text = (
+        "## Pinned\n![[TASKS_WORK#^todo]]\n"
+        "## Links\n- [[notes/2026-09-06]]\n- [x] [[a/b/laundry]]\n"
+        "## Alias\n[[x|an alias long enough to count as text]]\n"
+        "## Url\nhttps://example.com/a/very/long/path/that/is/not/text ^block-id\n"
+    )
+    assert [c.heading for c in chunk_markdown(text)] == ["Alias"]

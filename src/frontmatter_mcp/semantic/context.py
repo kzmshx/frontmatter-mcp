@@ -1,6 +1,7 @@
 """The semantic search context: the one object the tools talk to."""
 
 import threading
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -62,7 +63,11 @@ class SemanticContext:
         }
 
     def search(
-        self, query: str, limit: int, allowed_paths: set[str] | None = None
+        self,
+        query: str,
+        limit: int,
+        allowed_paths: set[str] | None = None,
+        exclude_sections: Sequence[str] = (),
     ) -> list[SearchHit]:
         """Hybrid search (see semantic.search); empty if nothing is indexed."""
         index = self.search_index()
@@ -74,6 +79,7 @@ class SemanticContext:
             limit,
             allowed_paths=allowed_paths,
             reranker=self.reranker,
+            exclude_sections=exclude_sections,
         )
 
     def document_vectors(self) -> dict[str, NDArray[np.float32]]:

@@ -17,6 +17,7 @@ def _rows(items: list[tuple[str, str, list[float]]]) -> ChunkRows:
         headings=["h"] * len(items),
         texts=[t for _, t, _ in items],
         vectors=vecs,
+        sections=[["h"] for _ in items],
     )
 
 
@@ -90,3 +91,53 @@ def test_result_text_is_truncated() -> None:
     long_rows = _rows([("a.md", "あ" * 2000, [1, 0, 0, 0])])
     hit = SearchIndex(long_rows).search(np.array([1, 0, 0, 0], np.float32), "あ", 1)[0]
     assert len(hit.to_dict()["text"]) <= 801
+
+
+def test_text_repeated_across_documents_is_not_returned() -> None:
+    """A template checklist in every note never crowds out real passages."""
+    from frontmatter_mcp.semantic.search import REPEATED_MIN_DOCUMENTS
+
+    n = REPEATED_MIN_DOCUMENTS
+    template = [
+        (
+            f"d{i:02d}.md",
+            f"Tracking\n- [{'x' if i % 2 else ' '}] walk {i} steps",
+            [1, 0, 0, 0],
+        )
+        for i in range(n)
+    ]
+    rows = _rows([*template, ("own.md", "a walk by the river", [0.5, 0.5, 0, 0])])
+    hits = SearchIndex(rows).search(np.array([1, 0, 0, 0], np.float32), "walk", 5)
+    assert [h.path for h in hits] == ["own.md"]
+
+
+def test_text_in_a_few_documents_is_kept() -> None:
+    from frontmatter_mcp.semantic.search import REPEATED_MIN_DOCUMENTS
+
+    items = [
+        (f"d{i}.md", "same text", [1, 0, 0, 0])
+        for i in range(REPEATED_MIN_DOCUMENTS - 1)
+    ]
+    hits = SearchIndex(_rows(items)).search(
+        np.array([1, 0, 0, 0], np.float32), "same", 20
+    )
+    assert len(hits) == REPEATED_MIN_DOCUMENTS - 1
+
+
+def test_exclude_sections_skips_chunks_under_a_heading() -> None:
+    rows = _rows(
+        [
+            ("a.md", "comment on the walk", [1, 0, 0, 0]),
+            ("a.md", "I walked by the river", [0.6, 0.4, 0, 0]),
+            ("b.md", "comment on dinner", [0.9, 0.1, 0, 0]),
+        ]
+    )
+    rows.sections = [["Day", "AI comments", "Walk"], ["Day", "Log"], ["AI comments"]]
+    index = SearchIndex(rows)
+    query = np.array([1, 0, 0, 0], np.float32)
+    for reranker in (None, FakeReranker()):
+        hits = index.search(
+            query, "walk", 5, reranker=reranker, exclude_sections=["AI comments"]
+        )
+        assert [(h.path, h.line) for h in hits] == [("a.md", 2)]
+        assert hits[0].to_dict()["section"] == ["Day", "Log"]

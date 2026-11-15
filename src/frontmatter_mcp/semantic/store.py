@@ -17,7 +17,7 @@ from frontmatter_mcp.semantic.models import EmbeddingModel
 # this name, so renaming it would leave the old file behind
 STORE_DB_NAME = "embeddings.duckdb"
 # Bump when the tables or what goes into a vector change; the store is rebuilt
-SCHEMA_VERSION = "3"
+SCHEMA_VERSION = "4"
 
 _READONLY_ERRORS = (
     duckdb.IOException,  # database is locked by another process
@@ -35,6 +35,8 @@ class ChunkRows:
     headings: list[str]
     texts: list[str]
     vectors: NDArray[np.float32]
+    # Heading path of each chunk, top level first (see Chunk.section)
+    sections: list[list[str]]
 
     def __len__(self) -> int:
         return len(self.paths)
@@ -46,7 +48,8 @@ class ChunkStore:
     Tables:
         indexed_files(path, mtime): every indexed file, including ones with no
             chunks
-        chunks(path, idx, line, heading, text, vector): one row per chunk
+        chunks(path, idx, line, heading, section, text, vector): one row per
+            chunk
         metadata(key, value): schema version, model, dimension, document prefix
     """
 
@@ -126,6 +129,7 @@ class ChunkStore:
                 idx INTEGER,
                 line INTEGER,
                 heading TEXT,
+                section TEXT[],
                 text TEXT,
                 vector FLOAT[{dim}]
             )
@@ -147,13 +151,20 @@ class ChunkStore:
         if not entries:
             return
         dim = self._model.get_dimension()
-        paths, idxs, lines, headings, texts, vecs = [], [], [], [], [], []
+        paths: list[str] = []
+        idxs: list[int] = []
+        lines: list[int] = []
+        headings: list[str] = []
+        sections: list[list[str]] = []
+        texts: list[str] = []
+        vecs: list[NDArray[np.float32]] = []
         for path, _, chunks, vectors in entries:
             for i, chunk in enumerate(chunks):
                 paths.append(path)
                 idxs.append(i)
                 lines.append(chunk.line)
                 headings.append(chunk.heading)
+                sections.append(list(chunk.section))
                 texts.append(chunk.text)
             if len(chunks):
                 vecs.append(np.asarray(vectors[: len(chunks)], dtype=np.float32))
@@ -164,6 +175,7 @@ class ChunkStore:
                 "idx": pa.array(idxs, pa.int32()),
                 "line": pa.array(lines, pa.int32()),
                 "heading": pa.array(headings, pa.string()),
+                "section": pa.array(sections, pa.list_(pa.string())),
                 "text": pa.array(texts, pa.string()),
                 "vector": pa.FixedSizeListArray.from_arrays(pa.array(flat), dim),
             }
@@ -184,7 +196,7 @@ class ChunkStore:
             )
             conn.execute(f"""
                 INSERT INTO chunks
-                SELECT path, idx, line, heading, text, vector::FLOAT[{dim}]
+                SELECT path, idx, line, heading, section, text, vector::FLOAT[{dim}]
                 FROM new_chunks
             """)
             conn.execute(
@@ -256,7 +268,8 @@ class ChunkStore:
 
     def _read_chunks(self, conn: duckdb.DuckDBPyConnection) -> ChunkRows:
         relation: Any = conn.sql(
-            "SELECT path, line, heading, text, vector FROM chunks ORDER BY path, idx"
+            "SELECT path, line, heading, section, text, vector FROM chunks "
+            "ORDER BY path, idx"
         )
         # DuckDB 2 has to_arrow_table; 1.x has arrow()
         to_arrow = getattr(relation, "to_arrow_table", None) or relation.arrow
@@ -274,6 +287,7 @@ class ChunkStore:
             headings=table.column("heading").to_pylist(),
             texts=table.column("text").to_pylist(),
             vectors=np.ascontiguousarray(flat, dtype=np.float32).reshape(-1, dim),
+            sections=table.column("section").to_pylist(),
         )
 
     def compact_if_needed(

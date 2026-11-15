@@ -34,6 +34,7 @@ def _rows(n_docs: int, chunks_per_doc: int = 10, dim: int = 256) -> ChunkRows:
         headings=[""] * n,
         texts=texts,
         vectors=vectors,
+        sections=[[] for _ in range(n)],
     )
 
 
