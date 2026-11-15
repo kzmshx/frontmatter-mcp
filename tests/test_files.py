@@ -6,6 +6,7 @@ from pathlib import Path
 import frontmatter
 import pytest
 
+import frontmatter_mcp.files as files_module
 from frontmatter_mcp.files import (
     FileRecordCache,
     parse_file,
@@ -212,16 +213,16 @@ class TestWritePost:
     def test_failure_leaves_original_intact(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """A serialization error does not truncate the original file."""
+        """A failure while replacing the file does not touch the original."""
         md_file = tmp_path / "test.md"
         original = "---\ntitle: Test\n---\n# Body\n"
         md_file.write_text(original)
 
-        def broken_dumps(*args: object, **kwargs: object) -> str:
-            raise TypeError("boom")
+        def broken_replace(*args: object, **kwargs: object) -> None:
+            raise OSError("boom")
 
-        monkeypatch.setattr(frontmatter, "dumps", broken_dumps)
-        with pytest.raises(TypeError):
+        monkeypatch.setattr(files_module.os, "replace", broken_replace)
+        with pytest.raises(OSError):
             update_file(md_file, tmp_path, {"status": "done"})
 
         assert md_file.read_text() == original
@@ -257,6 +258,91 @@ class TestWritePost:
         write_post(md_file, frontmatter.load(md_file))
 
         assert md_file.stat().st_mode & 0o777 == 0o644
+
+
+class TestPreserveStyle:
+    """Only changed keys are rewritten; the rest of the file keeps its form."""
+
+    def _write(self, tmp_path: Path, text: str) -> Path:
+        md_file = tmp_path / "note.md"
+        md_file.write_text(text)
+        return md_file
+
+    def test_flow_list_kept_when_other_key_changes(self, tmp_path: Path) -> None:
+        md_file = self._write(
+            tmp_path, "---\ndate: 2025-11-01\ntags: [a, b]\n---\nBody\n"
+        )
+        update_file(md_file, tmp_path, {"status": "done"})
+        assert md_file.read_text() == (
+            "---\ndate: 2025-11-01\ntags: [a, b]\nstatus: done\n---\nBody\n"
+        )
+
+    def test_replaced_flow_list_stays_flow(self, tmp_path: Path) -> None:
+        md_file = self._write(tmp_path, "---\ntags: [a, b]\n---\nBody\n")
+        update_file(md_file, tmp_path, {"tags": ["a", "b", "c"]})
+        assert md_file.read_text() == "---\ntags: [a, b, c]\n---\nBody\n"
+
+    def test_replaced_block_list_stays_block(self, tmp_path: Path) -> None:
+        md_file = self._write(tmp_path, "---\ntags:\n- a\n---\nBody\n")
+        update_file(md_file, tmp_path, {"tags": ["a", "b"]})
+        assert md_file.read_text() == "---\ntags:\n- a\n- b\n---\nBody\n"
+
+    def test_new_list_follows_file_style(self, tmp_path: Path) -> None:
+        flow = self._write(tmp_path, "---\naliases: [x]\n---\n")
+        update_file(flow, tmp_path, {"tags": ["a"]})
+        assert flow.read_text() == "---\naliases: [x]\ntags: [a]\n---\n"
+
+        block = tmp_path / "block.md"
+        block.write_text("---\ntitle: t\n---\n")
+        update_file(block, tmp_path, {"tags": ["a"]})
+        assert block.read_text() == "---\ntitle: t\ntags:\n- a\n---\n"
+
+    def test_empty_flow_list_filled_as_flow(self, tmp_path: Path) -> None:
+        md_file = self._write(tmp_path, "---\ndate: 2025-11-01\ntags: []\n---\n")
+        update_file(md_file, tmp_path, {"tags": ["record/daily"]})
+        expected = "---\ndate: 2025-11-01\ntags: [record/daily]\n---\n"
+        assert md_file.read_text() == expected
+
+    def test_indented_block_list_keeps_indent(self, tmp_path: Path) -> None:
+        md_file = self._write(tmp_path, "---\ntags:\n  - a\n---\n")
+        update_file(md_file, tmp_path, {"tags": ["a", "b"]})
+        assert md_file.read_text() == "---\ntags:\n  - a\n  - b\n---\n"
+
+    def test_yaml_11_scalars_not_rewritten(self, tmp_path: Path) -> None:
+        """`On` reads as True in YAML 1.1; setting another key must not touch it."""
+        md_file = self._write(tmp_path, "---\nbrand: On\ntitle: x\n---\n")
+        update_file(md_file, tmp_path, {"title": "y"})
+        assert md_file.read_text() == "---\nbrand: On\ntitle: y\n---\n"
+
+    def test_file_ending_at_closing_delimiter(self, tmp_path: Path) -> None:
+        md_file = self._write(tmp_path, "---\ntitle: x\n---")
+        update_file(md_file, tmp_path, {"title": "y"})
+        assert md_file.read_text() == "---\ntitle: y\n---"
+
+    def test_quotes_and_comments_kept(self, tmp_path: Path) -> None:
+        text = '---\nimage: "[[a.jpg]]"  # cover\ntitle: x\n---\nBody\n'
+        md_file = self._write(tmp_path, text)
+        update_file(md_file, tmp_path, {"title": "y"})
+        assert md_file.read_text() == (
+            '---\nimage: "[[a.jpg]]"  # cover\ntitle: y\n---\nBody\n'
+        )
+
+    def test_body_kept_byte_for_byte(self, tmp_path: Path) -> None:
+        body = "\n\n# H\n\ntext without trailing newline"
+        md_file = self._write(tmp_path, "---\ntitle: x\n---\n" + body)
+        update_file(md_file, tmp_path, {"title": "y"})
+        assert md_file.read_text() == "---\ntitle: y\n---\n" + body
+
+    def test_unset_last_key_removes_block(self, tmp_path: Path) -> None:
+        md_file = self._write(tmp_path, "---\ntitle: x\n---\nBody\n")
+        update_file(md_file, tmp_path, unset=["title"])
+        assert md_file.read_text() == "Body\n"
+
+    def test_long_value_not_wrapped(self, tmp_path: Path) -> None:
+        md_file = self._write(tmp_path, "---\ntitle: x\n---\n")
+        long = "word " * 40
+        update_file(md_file, tmp_path, {"summary": long.strip()})
+        assert f"summary: {long.strip()}\n" in md_file.read_text()
 
 
 class TestFrontmatterCache:
