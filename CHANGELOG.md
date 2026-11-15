@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/kzmshx/frontmatter-mcp/compare/v0.6.0...v0.6.1) (2026-11-15)
+
+
+### Bug Fixes
+
+* report and use the index a search serves before the first run ends ([#72](https://github.com/kzmshx/frontmatter-mcp/issues/72)) ([bf82d36](https://github.com/kzmshx/frontmatter-mcp/commit/bf82d365c43ac6b6608917fb23911f4516409012))
+
 ## [0.6.0](https://github.com/kzmshx/frontmatter-mcp/compare/v0.5.6...v0.6.0) (2026-11-15)
 
 
