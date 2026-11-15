@@ -91,6 +91,7 @@ def chunk_rows(vectors: dict[str, NDArray[np.float32]], dim: int = DIM) -> Chunk
         lines=np.ones(len(paths), dtype=np.int64),
         headings=[""] * len(paths),
         texts=[""] * len(paths),
+        sections=[[] for _ in paths],
         vectors=(
             np.array([vectors[p] for p in paths], dtype=np.float32)
             if paths

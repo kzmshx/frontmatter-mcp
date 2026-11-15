@@ -51,6 +51,7 @@ def search(
     glob: str = "**/*.md",
     where: str | None = None,
     limit: int = 10,
+    exclude_sections: list[str] | None = None,
     settings: Settings = Depends(get_settings),
     cache: FileRecordCache = Depends(get_file_record_cache),
     semantic_ctx: SemanticContext | None = Depends(get_semantic_ctx),
@@ -71,9 +72,14 @@ def search(
             "date < '2026-11-01'", "path LIKE 'daily/%'",
             "list_contains(from_json(tags, '[\\"VARCHAR\\"]'), 'record/daily')".
         limit: Maximum number of documents to return (1-50). Default 10.
+        exclude_sections: Headings to leave out: a passage under any of them,
+            at any level, is not matched (e.g. ["AI comments"] to skip a
+            section other people or tools write in every note).
 
     Returns:
-        Dict with results (path, line, heading, text, score; best first) and
+        Dict with results (path, line, heading, section, text, score; best
+        first; section is the heading path from the top level down to
+        heading) and
         index (state, whether an index exists, last run statistics and
         error). Scores are only comparable within one search. The first
         search in a session brings the index up to date (usually seconds); if
@@ -92,7 +98,16 @@ def search(
         rows = run_sql(conn, f"SELECT path FROM files WHERE {where}")
         allowed &= {r["path"] for r in rows["results"]}
 
-    hits = semantic_ctx.search(query, limit, allowed_paths=allowed) if allowed else []
+    hits = (
+        semantic_ctx.search(
+            query,
+            limit,
+            allowed_paths=allowed,
+            exclude_sections=exclude_sections or (),
+        )
+        if allowed
+        else []
+    )
     result = SearchResult(
         results=[cast(SearchHitResult, h.to_dict()) for h in hits],
         index=_status(semantic_ctx),

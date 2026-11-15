@@ -273,6 +273,7 @@ This tool is only available when `FRONTMATTER_ENABLE_SEMANTIC=true`.
 | `glob`    | string | Glob pattern to search within (default `**/*.md`)                 |
 | `where`   | string | Optional SQL condition on frontmatter, same columns as `query`    |
 | `limit`   | number | Maximum documents to return, 1-50 (default 10)                    |
+| `exclude_sections` | string[] | Headings whose passages are skipped, at any level (optional) |
 
 **Example:**
 
@@ -287,6 +288,7 @@ This tool is only available when `FRONTMATTER_ENABLE_SEMANTIC=true`.
       "path": "daily/2025-10-15.md",
       "line": 42,
       "heading": "Timeline",
+      "section": ["Daily", "Timeline"],
       "text": "Timeline\n- 20:48 Nobody around on my birthday ...",
       "score": 0.9312
     }
@@ -295,7 +297,7 @@ This tool is only available when `FRONTMATTER_ENABLE_SEMANTIC=true`.
 }
 ```
 
-`line` is where the passage starts in the file. Scores are only comparable within one search.
+`line` is where the passage starts in the file. `section` is the heading path from the top level down to `heading`, so a passage under a recurring section (for example comments added to each note by a tool) can be told apart; `exclude_sections` leaves such sections out of the search. Scores are only comparable within one search.
 
 ### index_status
 
@@ -397,7 +399,7 @@ Files containing Obsidian Templater expressions (e.g., `<% tp.date.now("YYYY-MM-
 
 ### Semantic Search
 
-Each file's body is split into chunks of about 400 characters at headings and line breaks, and each chunk is embedded. Indexing starts on the first semantic call (`search`, a `query` using `embed()`, or `index_refresh`), not at server startup, and only re-reads files whose mtime changed. Dot directories such as `.obsidian` are skipped.
+Each file's body is split into chunks of about 400 characters at headings and line breaks, and each chunk is embedded. Chunks with under 20 characters of text once links, embeds, URLs and list markers are removed are not indexed. A chunk whose text, ignoring checkbox state, numbers and whitespace, appears in 10 or more documents is template text (a daily checklist, for example) and is never returned by `search`. Indexing starts on the first semantic call (`search`, a `query` using `embed()`, or `index_refresh`), not at server startup, and only re-reads files whose mtime changed. Dot directories such as `.obsidian` are skipped.
 
 The `search` tool combines three signals:
 
@@ -430,7 +432,7 @@ Environment variables:
 | FRONTMATTER_RERANKER_MODEL            | hotchpotch/japanese-reranker-xsmall-v2  | Cross-encoder for `search`; empty string turns it off |
 | FRONTMATTER_CACHE_DIR                 | FRONTMATTER_BASE_DIR/.frontmatter-mcp   | Cache directory for embeddings                      |
 
-Changing the model or the document prefix, or upgrading from a version before chunked indexing, rebuilds the cache on the next start.
+Changing the model or the document prefix rebuilds the cache on the next start. Each schema version has its own file (`chunks-v4.duckdb`), so sessions still running an older version keep their own store instead of deleting the new one; files of other versions are deleted once no process has them open.
 
 Resource use, measured on a 1,900-file vault (27,700 chunks) on an M-series Mac:
 
