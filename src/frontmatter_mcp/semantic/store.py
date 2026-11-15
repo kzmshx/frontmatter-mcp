@@ -13,11 +13,14 @@ from numpy.typing import NDArray
 from frontmatter_mcp.semantic.chunking import Chunk
 from frontmatter_mcp.semantic.models import EmbeddingModel
 
-# Database filename. Kept from the first version: a rebuild deletes the file by
-# this name, so renaming it would leave the old file behind
-STORE_DB_NAME = "embeddings.duckdb"
 # Bump when the tables or what goes into a vector change; the store is rebuilt
 SCHEMA_VERSION = "4"
+# One file per schema version. Servers of different versions can run at the
+# same time (one per client session); with a shared file name each would
+# delete the other's store as "made for another setup" and rebuild its own
+STORE_DB_NAME = f"chunks-v{SCHEMA_VERSION}.duckdb"
+# Files of earlier versions, removed once no process has them open
+LEGACY_DB_GLOBS = ("embeddings.duckdb", "chunks-v*.duckdb")
 
 _READONLY_ERRORS = (
     duckdb.IOException,  # database is locked by another process
@@ -88,9 +91,27 @@ class ChunkStore:
             "document_prefix": self._model.document_prefix,
         }
 
-    def _remove_files(self) -> None:
-        for path in (self.path, Path(f"{self.path}.wal")):
-            path.unlink(missing_ok=True)
+    def _remove_files(self, path: Path | None = None) -> None:
+        path = path or self.path
+        for p in (path, Path(f"{path}.wal")):
+            p.unlink(missing_ok=True)
+
+    def _remove_legacy_files(self) -> None:
+        """Delete stores of other schema versions that no process has open.
+
+        Opening a file for writing fails while any other process has it open
+        (for writing or reading), so a store an older server is still using is
+        left alone and tried again on a later start.
+        """
+        for pattern in LEGACY_DB_GLOBS:
+            for path in self._cache_dir.glob(pattern):
+                if path == self.path:
+                    continue
+                try:
+                    duckdb.connect(str(path)).close()
+                except duckdb.Error:
+                    continue
+                self._remove_files(path)
 
     def _connect(self) -> None:
         """Connect, starting a fresh file if the cache was made for another setup.
@@ -99,6 +120,7 @@ class ChunkStore:
         shrink a database file, so dropped data would keep taking disk space.
         """
         self._cache_dir.mkdir(parents=True, exist_ok=True)
+        self._remove_legacy_files()
         expected = self._expected_metadata()
         self._conn = duckdb.connect(str(self.path))
         try:

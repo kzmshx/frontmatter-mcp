@@ -158,18 +158,48 @@ class TestChunkStore:
         assert file_count(second) == 0
         second.close()
 
-    def test_drops_schema_v1_table(self, cache_dir: Path) -> None:
+    def test_removes_stores_of_other_versions(self, cache_dir: Path) -> None:
         cache_dir.mkdir(parents=True)
-        with duckdb.connect(str(cache_dir / STORE_DB_NAME)) as conn:
-            conn.execute("CREATE TABLE embeddings (path TEXT, vector FLOAT[8])")
-            conn.execute("CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT)")
-            conn.execute("INSERT INTO metadata VALUES ('model_name', 'test-model')")
+        legacy = [cache_dir / "embeddings.duckdb", cache_dir / "chunks-v3.duckdb"]
+        for path in legacy:
+            with duckdb.connect(str(path)) as conn:
+                conn.execute("CREATE TABLE metadata (key TEXT, value TEXT)")
+        (cache_dir / "embeddings.duckdb.wal").write_bytes(b"")
 
         cache = ChunkStore(cache_dir, model=create_mock_model())
         tables = {r[0] for r in cache.conn.execute("SHOW TABLES").fetchall()}
-        assert "embeddings" not in tables
         assert {"indexed_files", "chunks", "metadata"} <= tables
         cache.close()
+        assert sorted(p.name for p in cache_dir.iterdir()) == [STORE_DB_NAME]
+
+    def test_keeps_a_store_another_process_has_open(self, cache_dir: Path) -> None:
+        """An older server still using its store is not disturbed."""
+        import subprocess
+        import sys
+
+        cache_dir.mkdir(parents=True)
+        legacy = cache_dir / "embeddings.duckdb"
+        holder = subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                "import duckdb, sys; c = duckdb.connect(sys.argv[1]); "
+                "print('ready', flush=True); sys.stdin.read()",
+                str(legacy),
+            ],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            assert holder.stdout is not None
+            assert holder.stdout.readline().strip() == "ready"
+            cache = ChunkStore(cache_dir, model=create_mock_model())
+            assert cache.indexed_mtimes() == {}
+            cache.close()
+            assert legacy.exists()
+        finally:
+            holder.communicate("")
 
 
 class TestCacheDiskSpace:

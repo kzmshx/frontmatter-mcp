@@ -427,7 +427,7 @@ Environment variables:
 | FRONTMATTER_RERANKER_MODEL            | hotchpotch/japanese-reranker-xsmall-v2  | Cross-encoder for `search`; empty string turns it off |
 | FRONTMATTER_CACHE_DIR                 | FRONTMATTER_BASE_DIR/.frontmatter-mcp   | Cache directory for embeddings                      |
 
-Changing the model or the document prefix, or upgrading from a version before chunked indexing, rebuilds the cache on the next start.
+Changing the model or the document prefix rebuilds the cache on the next start. Each schema version has its own file (`chunks-v4.duckdb`), so sessions still running an older version keep their own store instead of deleting the new one; files of other versions are deleted once no process has them open.
 
 Resource use, measured on a 1,900-file vault (27,700 chunks) on an M-series Mac:
 

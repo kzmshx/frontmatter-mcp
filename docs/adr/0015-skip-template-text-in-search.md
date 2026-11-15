@@ -24,7 +24,7 @@ A related problem: chunks only kept their nearest heading. Sections that a tool 
 - At search time, a chunk whose text recurs in 10 or more documents, ignoring checkbox state, digits and whitespace, is never a candidate. It is computed when the index is loaded (about 0.4 s for 26,000 chunks, once per index generation), so it follows the current vault without extra state
 - Keep each chunk's heading path (`section`, top level first) in the store and return it with every result. `search` takes `exclude_sections`: headings whose chunks, at any level, are skipped
 
-Store schema 4; existing stores are rebuilt.
+Store schema 4; existing stores are rebuilt. The store file is now named by schema version (`chunks-v4.duckdb` instead of `embeddings.duckdb`). Clients run one server per session, so after an upgrade old and new servers run side by side; with one file name each would delete the other's store as "made for another setup" and rebuild its own. Files of other versions are deleted when the store is opened, unless another process has them open.
 
 ## Consequences
 
