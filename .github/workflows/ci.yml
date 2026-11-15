@@ -5,35 +5,77 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Weekly run catches new advisories and upstream breakage between dependency PRs
+  schedule:
+    - cron: "0 21 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/ruff-action@v3
-        with:
-          args: check
-          src: ./src ./tests
-      - uses: astral-sh/ruff-action@v3
-        with:
-          args: format --check
-          src: ./src ./tests
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+      - run: uv sync --locked --all-extras
+      - run: uv run ruff check src tests
+      - run: uv run ruff format --check src tests
 
   typecheck:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-      - run: uv python install
-      - run: uv sync --group dev
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+      - run: uv sync --locked --all-extras
       - run: uv run mypy
 
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.14"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-      - run: uv python install
-      - run: uv sync --group dev
-      - run: uv run python -m pytest
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          python-version: ${{ matrix.python }}
+      - run: uv sync --locked --all-extras
+      - run: uv run pytest
+
+  # What `uvx` users get: the newest versions pyproject.toml allows, ignoring uv.lock
+  test-latest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+      - run: uv lock --upgrade
+      - run: uv sync --all-extras
+      - run: uv run pytest
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+      - name: Audit uv.lock
+        run: |
+          uv export --locked --all-extras --no-dev --no-hashes --no-emit-project -o locked.txt
+          uvx pip-audit -r locked.txt --disable-pip --no-deps
+      - name: Audit newest allowed versions
+        run: |
+          uv lock --upgrade
+          uv export --all-extras --no-dev --no-hashes --no-emit-project -o latest.txt
+          uvx pip-audit -r latest.txt --disable-pip --no-deps
+
+  # Single required check for the branch ruleset
+  ci-ok:
+    if: always()
+    needs: [lint, typecheck, test, test-latest, audit]
+    runs-on: ubuntu-latest
+    steps:
+      - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')
+        run: exit 1
+      - run: echo ok
