@@ -8,7 +8,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "duckdb>=1.0.0,<3.0.0",
-  "fastmcp>=3.2.0,<4.0.0",
+  "fastmcp>=3.2.0,<5.0.0",
   "pyarrow>=22.0.0,<27.0.0",
   "pydantic-settings>=2.0.0,<3.0.0",
   "python-frontmatter>=1.0.0,<2.0.0",
@@ -16,8 +16,8 @@ dependencies = [
 
 [project.optional-dependencies]
 semantic = [
-  "protobuf>=3.0.0,<6.0.0",
-  "sentence-transformers>=2.0.0,<6.0.0",
+  "protobuf>=3.0.0,<8.0.0",
+  "sentence-transformers>=2.0.0,<7.0.0",
   "sentencepiece>=0.1.0,<1.0.0",
 ]
 
