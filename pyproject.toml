@@ -13,7 +13,7 @@ dependencies = [
   # is off (types, dependency wiring), and it uses numpy at import time
   "numpy>=1.24.0,<3.0.0",
   "pyarrow>=22.0.0,<27.0.0",
-  "pydantic-settings>=2.0.0,<3.0.0",
+  "pydantic-settings>=2.7.0,<3.0.0",
   "python-frontmatter>=1.0.0,<2.0.0",
   "ruamel-yaml>=0.18.0,<1.0.0",
   # pydantic needs typing_extensions.TypedDict for output schemas on Python < 3.12

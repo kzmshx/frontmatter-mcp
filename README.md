@@ -387,6 +387,10 @@ WHERE tag = 'ai'
 
 The update tools rewrite only the frontmatter keys whose values change. Other keys, comments, quotes, line wrapping, and the body stay byte for byte. A replaced list keeps its style (`tags: [a, b]` stays inline, block lists keep their indentation), and a new list follows the style already used in the file. Files are written atomically, so a failed write never leaves a partial file.
 
+### Excluding Files
+
+`FRONTMATTER_EXCLUDE` takes comma-separated globs relative to `FRONTMATTER_BASE_DIR`, such as `IDENTITY.md,_templates`. Matching files are left out of `query` and the write tools, `update` refuses them, and the semantic index drops them on its next run. A pattern that matches a directory excludes everything under it; `**/name.md` matches at any depth. Dot directories (`.obsidian`, `.git`) are always skipped by the semantic index.
+
 ### Templater Expression Support
 
 Files containing Obsidian Templater expressions (e.g., `<% tp.date.now("YYYY-MM-DD") %>`) are handled gracefully. These expressions are treated as strings and naturally excluded by date filtering.
@@ -418,6 +422,7 @@ Environment variables:
 | Variable                              | Default                                 | Description                                         |
 | ------------------------------------- | --------------------------------------- | --------------------------------------------------- |
 | FRONTMATTER_BASE_DIR                  | (required)                              | Base directory for files                            |
+| FRONTMATTER_EXCLUDE                   | (none)                                  | Comma-separated globs no tool reads, writes or indexes |
 | FRONTMATTER_ENABLE_SEMANTIC           | false                                   | Enable semantic search                              |
 | FRONTMATTER_EMBEDDING_MODEL           | cl-nagoya/ruri-v3-30m                   | Embedding model name                                |
 | FRONTMATTER_EMBEDDING_QUERY_PREFIX    | model default (`検索クエリ: ` for ruri-v3) | Prefix added to queries                             |
