@@ -138,6 +138,25 @@ class TestChunkIndexer:
         self._run(ChunkIndexer(cache, mock_model, lambda: [file_a], base_dir))
         assert cache.indexed_mtimes().keys() == {"a.md"}
 
+    def test_newly_excluded_file_removed_from_cache(
+        self, cache: ChunkStore, mock_model: FakeEmbeddingModel, base_dir: Path
+    ) -> None:
+        from frontmatter_mcp.paths import list_markdown_files
+
+        self._create_md_file(base_dir, "a.md", LONG)
+        self._create_md_file(base_dir, "IDENTITY.md", LONG)
+        exclude: list[str] = []
+        indexer = ChunkIndexer(
+            cache, mock_model, lambda: list_markdown_files(base_dir, exclude), base_dir
+        )
+        self._run(indexer)
+        assert cache.indexed_mtimes().keys() == {"a.md", "IDENTITY.md"}
+
+        exclude.append("IDENTITY.md")
+        self._run(indexer)
+        assert cache.indexed_mtimes().keys() == {"a.md"}
+        assert indexer.last_run.removed == 1
+
     def test_file_without_chunks_is_recorded_once(
         self, cache: ChunkStore, mock_model: FakeEmbeddingModel, base_dir: Path
     ) -> None:

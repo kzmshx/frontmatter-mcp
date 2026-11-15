@@ -683,7 +683,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.24.0,<3.0.0" },
     { name = "protobuf", marker = "extra == 'semantic'", specifier = ">=3.0.0,<8.0.0" },
     { name = "pyarrow", specifier = ">=22.0.0,<27.0.0" },
-    { name = "pydantic-settings", specifier = ">=2.0.0,<3.0.0" },
+    { name = "pydantic-settings", specifier = ">=2.7.0,<3.0.0" },
     { name = "python-frontmatter", specifier = ">=1.0.0,<2.0.0" },
     { name = "ruamel-yaml", specifier = ">=0.18.0,<1.0.0" },
     { name = "scikit-learn", marker = "extra == 'semantic'", specifier = ">=1.1.0,<2.0.0" },

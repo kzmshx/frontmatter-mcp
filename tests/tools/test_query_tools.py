@@ -34,6 +34,17 @@ class TestQueryInspect:
 class TestQuery:
     """Tests for query tool."""
 
+    def test_excluded_files_are_invisible(
+        self, base_dir: Path, state: AppState
+    ) -> None:
+        state.settings.exclude = ["subdir"]
+        result = tools.query(
+            glob="**/*.md",
+            sql="SELECT path FROM files ORDER BY path",
+            **tool_deps(get_state()),
+        )
+        assert [r["path"] for r in result["results"]] == ["a.md", "b.md"]
+
     def test_select_all(self, base_dir: Path, state: AppState) -> None:
         """Select all files."""
         result = tools.query(

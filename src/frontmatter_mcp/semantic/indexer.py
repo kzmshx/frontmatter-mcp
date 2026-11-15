@@ -30,7 +30,7 @@ class IndexRunStats:
     """What the last indexing run did."""
 
     indexed: int = 0  # files whose chunks were (re)written
-    removed: int = 0  # files dropped because they no longer exist
+    removed: int = 0  # files dropped because they no longer exist or are excluded
     failed: int = 0  # files that could not be read or encoded
     error: str | None = None  # why the run stopped early, if it did
 
