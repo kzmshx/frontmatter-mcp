@@ -59,8 +59,33 @@ def create_base_connection(records: list[dict[str, Any]]) -> duckdb.DuckDBPyConn
     return conn
 
 
+def restrict_connection(conn: duckdb.DuckDBPyConnection) -> None:
+    """Block file system, network, and extension access, then lock the config.
+
+    The query tool runs SQL written by the model. Without this, DuckDB functions
+    such as read_text() and COPY ... TO can read and write any file the server
+    process can reach, and httpfs can send data over the network. Tables that
+    are already loaded (files, embeddings) and Python UDFs (embed) keep working.
+
+    Safe to call more than once.
+
+    Args:
+        conn: DuckDB connection whose tables are already set up.
+    """
+    locked = conn.execute("SELECT current_setting('lock_configuration')").fetchone()
+    if locked and locked[0]:
+        return
+    conn.execute("SET enable_external_access = false")
+    conn.execute("SET autoinstall_known_extensions = false")
+    conn.execute("SET autoload_known_extensions = false")
+    conn.execute("SET lock_configuration = true")
+
+
 def execute_query(conn: duckdb.DuckDBPyConnection, sql: str) -> dict[str, Any]:
     """Execute SQL query on prepared connection.
+
+    The connection is restricted with restrict_connection() before the query
+    runs, so set up every table before calling this.
 
     Args:
         conn: DuckDB connection with tables already set up.
@@ -69,6 +94,7 @@ def execute_query(conn: duckdb.DuckDBPyConnection, sql: str) -> dict[str, Any]:
     Returns:
         Dictionary with results, row_count, and columns.
     """
+    restrict_connection(conn)
     result = conn.execute(sql)
     columns = [desc[0] for desc in result.description]
     rows = result.fetchall()

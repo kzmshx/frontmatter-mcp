@@ -1,0 +1,31 @@
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Asia/Tokyo
+    groups:
+      # One PR per week for everything within the current version ranges
+      dependencies:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    # fix: runtime dependency updates are released (release-please bumps the patch version)
+    # chore: dev-only updates are not released
+    commit-message:
+      prefix: fix
+      prefix-development: chore
+      include: scope
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Asia/Tokyo
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci

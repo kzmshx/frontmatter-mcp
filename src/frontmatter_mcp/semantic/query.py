@@ -34,8 +34,8 @@ def add_semantic_columns(
     conn.create_function(
         "embed",
         embed_func,
-        [str],  # type: ignore[list-item]
-        f"FLOAT[{dim}]",  # type: ignore[arg-type]
+        [str],
+        f"FLOAT[{dim}]",
     )
 
     # Add embedding column to files table

@@ -7,6 +7,7 @@ from typing import Any
 import frontmatter
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
+from mcp.types import ToolAnnotations
 
 from frontmatter_mcp.dependencies import (
     get_file_record_cache,
@@ -17,6 +18,7 @@ from frontmatter_mcp.files import (
     FileRecordCache,
     parse_files,
     update_file,
+    write_post,
 )
 from frontmatter_mcp.query import create_base_connection, execute_query
 from frontmatter_mcp.query_schema import create_base_schema
@@ -30,10 +32,18 @@ mcp = FastMCP("frontmatter-mcp")
 
 
 def _collect_files(base_dir: Path, glob_pattern: str) -> list[Path]:
-    """Collect files matching the glob pattern."""
+    """Collect files matching the glob pattern, limited to base_dir.
+
+    Matches that resolve outside base_dir (via "..", an absolute pattern, or a
+    symlink) are dropped.
+    """
     pattern = str(base_dir / glob_pattern)
     matches = globmodule.glob(pattern, recursive=True)
-    return [Path(p) for p in matches if Path(p).is_file()]
+    return [
+        Path(p)
+        for p in matches
+        if Path(p).is_file() and Path(p).resolve().is_relative_to(base_dir)
+    ]
 
 
 def _build_response(
@@ -84,7 +94,7 @@ def _resolve_path(base_dir: Path, rel_path: str) -> Path:
     return abs_path
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def query_inspect(
     glob: str,
     settings: Settings = Depends(get_settings),
@@ -118,7 +128,7 @@ def query_inspect(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def query(
     glob: str,
     sql: str,
@@ -169,7 +179,7 @@ def query(
     )
 
 
-@mcp.tool(enabled=False)
+@mcp.tool(tags={"semantic"}, annotations=ToolAnnotations(readOnlyHint=True))
 def index_status(
     semantic_ctx: SemanticContext | None = Depends(get_semantic_ctx),
 ) -> Response:
@@ -185,7 +195,7 @@ def index_status(
     return _build_response({"state": semantic_ctx.indexer.state.value})
 
 
-@mcp.tool(enabled=False)
+@mcp.tool(tags={"semantic"}, annotations=ToolAnnotations(readOnlyHint=True))
 def index_wait(
     timeout: float = 60.0,
     semantic_ctx: SemanticContext | None = Depends(get_semantic_ctx),
@@ -213,7 +223,7 @@ def index_wait(
     )
 
 
-@mcp.tool(enabled=False)
+@mcp.tool(tags={"semantic"})
 def index_refresh(
     semantic_ctx: SemanticContext | None = Depends(get_semantic_ctx),
 ) -> Response:
@@ -353,7 +363,7 @@ def batch_array_add(
             # Property doesn't exist: create new array
             if current is None:
                 post[property] = [value]
-                frontmatter.dump(post, abs_path)
+                write_post(abs_path, post)
                 updated_files.append(rel_path)
                 continue
 
@@ -368,7 +378,7 @@ def batch_array_add(
 
             # Add value
             current.append(value)
-            frontmatter.dump(post, abs_path)
+            write_post(abs_path, post)
             updated_files.append(rel_path)
 
         except Exception as e:
@@ -433,7 +443,7 @@ def batch_array_remove(
 
             # Remove value
             current.remove(value)
-            frontmatter.dump(post, abs_path)
+            write_post(abs_path, post)
             updated_files.append(rel_path)
 
         except Exception as e:
@@ -501,7 +511,7 @@ def batch_array_replace(
             # Replace value
             idx = current.index(old_value)
             current[idx] = new_value
-            frontmatter.dump(post, abs_path)
+            write_post(abs_path, post)
             updated_files.append(rel_path)
 
         except Exception as e:
@@ -579,7 +589,7 @@ def batch_array_sort(
 
             # Sort
             post[property] = sorted(current, reverse=reverse)
-            frontmatter.dump(post, abs_path)
+            write_post(abs_path, post)
             updated_files.append(rel_path)
 
         except Exception as e:
@@ -651,13 +661,17 @@ def batch_array_unique(
 
             # Update
             post[property] = unique
-            frontmatter.dump(post, abs_path)
+            write_post(abs_path, post)
             updated_files.append(rel_path)
 
         except Exception as e:
             warnings.append(f"Failed to update {rel_path}: {e}")
 
     return _build_batch_response(updated_files, warnings)
+
+
+# Semantic search tools stay hidden unless semantic search is enabled in main()
+mcp.disable(tags={"semantic"})
 
 
 def main() -> None:
@@ -668,9 +682,7 @@ def main() -> None:
         semantic_ctx = get_semantic_ctx()
         if semantic_ctx is not None:
             semantic_ctx.indexer.start()
-            index_status.enable()
-            index_wait.enable()
-            index_refresh.enable()
+            mcp.enable(tags={"semantic"})
 
     mcp.run()
 
