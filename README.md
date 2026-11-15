@@ -350,6 +350,10 @@ FROM files, UNNEST(from_json(tags, '[""]')) AS t(tag)
 WHERE tag = 'ai'
 ```
 
+### Writes Keep the File's Formatting
+
+The update tools rewrite only the frontmatter keys whose values change. Other keys, comments, quotes, line wrapping, and the body stay byte for byte. A replaced list keeps its style (`tags: [a, b]` stays inline, block lists keep their indentation), and a new list follows the style already used in the file. Files are written atomically, so a failed write never leaves a partial file.
+
 ### Templater Expression Support
 
 Files containing Obsidian Templater expressions (e.g., `<% tp.date.now("YYYY-MM-DD") %>`) are handled gracefully. These expressions are treated as strings and naturally excluded by date filtering.
