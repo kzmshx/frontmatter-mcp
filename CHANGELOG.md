@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.4](https://github.com/kzmshx/frontmatter-mcp/compare/v0.5.3...v0.5.4) (2026-11-15)
+
+
+### Bug Fixes
+
+* block file, network, and extension access from query SQL ([#51](https://github.com/kzmshx/frontmatter-mcp/issues/51)) ([8a55da3](https://github.com/kzmshx/frontmatter-mcp/commit/8a55da318699f9ed0feb7a3c1223c916850947c8))
+* **deps:** require FastMCP 3.2+ for security fixes ([8a55da3](https://github.com/kzmshx/frontmatter-mcp/commit/8a55da318699f9ed0feb7a3c1223c916850947c8))
+* write files atomically so a failed update no longer empties them ([#50](https://github.com/kzmshx/frontmatter-mcp/issues/50)) ([8a55da3](https://github.com/kzmshx/frontmatter-mcp/commit/8a55da318699f9ed0feb7a3c1223c916850947c8))
+
 ## [0.5.3](https://github.com/kzmshx/frontmatter-mcp/compare/v0.5.2...v0.5.3) (2025-12-31)
 
 
