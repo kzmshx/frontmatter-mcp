@@ -17,6 +17,7 @@ from frontmatter_mcp.files import (
     FileRecordCache,
     parse_files,
     update_file,
+    write_post,
 )
 from frontmatter_mcp.query import create_base_connection, execute_query
 from frontmatter_mcp.query_schema import create_base_schema
@@ -353,7 +354,7 @@ def batch_array_add(
             # Property doesn't exist: create new array
             if current is None:
                 post[property] = [value]
-                frontmatter.dump(post, abs_path)
+                write_post(abs_path, post)
                 updated_files.append(rel_path)
                 continue
 
@@ -368,7 +369,7 @@ def batch_array_add(
 
             # Add value
             current.append(value)
-            frontmatter.dump(post, abs_path)
+            write_post(abs_path, post)
             updated_files.append(rel_path)
 
         except Exception as e:
@@ -433,7 +434,7 @@ def batch_array_remove(
 
             # Remove value
             current.remove(value)
-            frontmatter.dump(post, abs_path)
+            write_post(abs_path, post)
             updated_files.append(rel_path)
 
         except Exception as e:
@@ -501,7 +502,7 @@ def batch_array_replace(
             # Replace value
             idx = current.index(old_value)
             current[idx] = new_value
-            frontmatter.dump(post, abs_path)
+            write_post(abs_path, post)
             updated_files.append(rel_path)
 
         except Exception as e:
@@ -579,7 +580,7 @@ def batch_array_sort(
 
             # Sort
             post[property] = sorted(current, reverse=reverse)
-            frontmatter.dump(post, abs_path)
+            write_post(abs_path, post)
             updated_files.append(rel_path)
 
         except Exception as e:
@@ -651,7 +652,7 @@ def batch_array_unique(
 
             # Update
             post[property] = unique
-            frontmatter.dump(post, abs_path)
+            write_post(abs_path, post)
             updated_files.append(rel_path)
 
         except Exception as e:
