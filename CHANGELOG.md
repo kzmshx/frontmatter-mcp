@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.2](https://github.com/kzmshx/frontmatter-mcp/compare/v0.6.1...v0.6.2) (2026-11-15)
+
+
+### Documentation
+
+* record why ONNX Runtime was not adopted ([#74](https://github.com/kzmshx/frontmatter-mcp/issues/74)) ([0d8f55c](https://github.com/kzmshx/frontmatter-mcp/commit/0d8f55c97ea1c450c09dce0ae09d923dd25a20ac))
+
 ## [0.6.1](https://github.com/kzmshx/frontmatter-mcp/compare/v0.6.0...v0.6.1) (2026-11-15)
 
 
