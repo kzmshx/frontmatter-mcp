@@ -1,5 +1,6 @@
 """Split Markdown into chunks for semantic search."""
 
+import re
 from dataclasses import dataclass
 
 # Target chunk size in characters. A single line longer than this becomes its
@@ -7,6 +8,9 @@ from dataclasses import dataclass
 MAX_CHUNK_CHARS = 400
 # Chunks shorter than this (after the heading) carry too little to match on
 MIN_CHUNK_CHARS = 20
+# ATX heading. "#tag" (Obsidian tags) has no space after the hashes
+_HEADING = re.compile(r"^#{1,6}\s+(.*?)\s*#*\s*$")
+_FENCE = re.compile(r"^\s*(```|~~~)")
 
 
 @dataclass(frozen=True)
@@ -53,11 +57,14 @@ def chunk_markdown(text: str) -> list[Chunk]:
             chunks.append(Chunk(line=start, heading=heading, text=text_))
         current.clear()
 
+    in_fence = False
     for offset, line in enumerate(body.splitlines()):
         lineno = first_line + offset
-        if line.startswith("#"):
+        if _FENCE.match(line):
+            in_fence = not in_fence
+        elif not in_fence and (match := _HEADING.match(line)):
             flush()
-            heading = line.lstrip("#").strip()
+            heading = match.group(1)
             start = lineno + 1
             continue
         if current and sum(len(x) for x in current) + len(line) > MAX_CHUNK_CHARS:

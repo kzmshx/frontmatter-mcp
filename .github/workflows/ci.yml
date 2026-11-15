@@ -44,6 +44,8 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: uv sync --locked --all-extras
       - run: uv run pytest
+      # Benchmarks are excluded from the default run; execute them once so they don't rot
+      - run: uv run pytest tests/benchmarks --benchmark-disable -o addopts=""
 
   # What `uvx` users get: the newest versions pyproject.toml allows, ignoring uv.lock
   test-latest:

@@ -137,22 +137,26 @@ class TestQueryE2EBenchmark:
     ) -> None:
         """Measure full query tool execution time."""
         import frontmatter_mcp.server as server_module
+        from frontmatter_mcp.files import FileRecordCache
         from frontmatter_mcp.settings import get_settings
 
         base_dir = benchmark_dir_factory(file_count)
-
-        # Set up server context
         monkeypatch.setenv("FRONTMATTER_BASE_DIR", str(base_dir))
         get_settings.cache_clear()
-        server_module._settings = get_settings()
-        server_module._semantic_ctx = None
+        settings = get_settings()
+        cache = FileRecordCache()
 
         def run_query() -> dict[str, Any]:
-            return server_module.query.fn("*.md", "SELECT * FROM files")
+            return server_module.query(
+                "*.md",
+                "SELECT * FROM files",
+                settings=settings,
+                cache=cache,
+                semantic_ctx=None,
+            )
 
         try:
             result = benchmark(run_query)
             assert result["row_count"] == file_count
         finally:
-            server_module._settings = None
             get_settings.cache_clear()

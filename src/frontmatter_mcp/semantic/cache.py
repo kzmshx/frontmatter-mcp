@@ -140,34 +140,75 @@ class EmbeddingCache:
         chunks: list[Chunk],
         vectors: NDArray[np.float32],
     ) -> None:
-        """Replace the chunks of one file.
+        """Replace the chunks of one file (see set_files)."""
+        self.set_files([(path, mtime, chunks, vectors)])
+
+    def set_files(
+        self,
+        entries: list[tuple[str, float, list[Chunk], NDArray[np.float32]]],
+    ) -> None:
+        """Replace the chunks of several files in one transaction.
+
+        Rows go in as one Arrow table rather than row by row, which is an
+        order of magnitude faster for vectors.
 
         Args:
-            path: File path relative to the base directory.
-            mtime: File modification time.
-            chunks: Chunks of the file (may be empty).
-            vectors: One vector per chunk.
+            entries: (path relative to the base directory, mtime, chunks, one
+                vector per chunk) for each file.
         """
+        if not entries:
+            return
+        dim = self._model.get_dimension()
+        paths, idxs, lines, headings, texts, vecs = [], [], [], [], [], []
+        for path, _, chunks, vectors in entries:
+            for i, chunk in enumerate(chunks):
+                paths.append(path)
+                idxs.append(i)
+                lines.append(chunk.line)
+                headings.append(chunk.heading)
+                texts.append(chunk.text)
+            if len(chunks):
+                vecs.append(np.asarray(vectors[: len(chunks)], dtype=np.float32))
+        flat = np.concatenate(vecs).ravel() if vecs else np.zeros(0, np.float32)
+        table = pa.table(
+            {
+                "path": pa.array(paths, pa.string()),
+                "idx": pa.array(idxs, pa.int32()),
+                "line": pa.array(lines, pa.int32()),
+                "heading": pa.array(headings, pa.string()),
+                "text": pa.array(texts, pa.string()),
+                "vector": pa.FixedSizeListArray.from_arrays(pa.array(flat), dim),
+            }
+        )
+        files = pa.table(
+            {
+                "path": pa.array([e[0] for e in entries], pa.string()),
+                "mtime": pa.array([e[1] for e in entries], pa.float64()),
+            }
+        )
         conn = self.conn
         conn.execute("BEGIN TRANSACTION")
         try:
-            conn.execute("DELETE FROM chunks WHERE path = ?", [path])
-            if chunks:
-                conn.executemany(
-                    "INSERT INTO chunks VALUES (?, ?, ?, ?, ?, ?)",
-                    [
-                        [path, i, c.line, c.heading, c.text, vectors[i].tolist()]
-                        for i, c in enumerate(chunks)
-                    ],
-                )
+            conn.register("new_files", files)
+            conn.register("new_chunks", table)
             conn.execute(
-                "INSERT OR REPLACE INTO files (path, mtime) VALUES (?, ?)",
-                [path, mtime],
+                "DELETE FROM chunks WHERE path IN (SELECT path FROM new_files)"
+            )
+            conn.execute(f"""
+                INSERT INTO chunks
+                SELECT path, idx, line, heading, text, vector::FLOAT[{dim}]
+                FROM new_chunks
+            """)
+            conn.execute(
+                "INSERT OR REPLACE INTO files SELECT path, mtime FROM new_files"
             )
             conn.execute("COMMIT")
         except BaseException:
             conn.execute("ROLLBACK")
             raise
+        finally:
+            conn.unregister("new_chunks")
+            conn.unregister("new_files")
 
     def delete(self, path: str) -> None:
         """Delete a file and its chunks."""
@@ -183,9 +224,7 @@ class EmbeddingCache:
         """Get paths that are new or changed since they were indexed."""
         cached = self.get_all_paths_with_mtime()
         return [
-            path
-            for path, mtime in current_files.items()
-            if (cached_mtime := cached.get(path)) is None or cached_mtime < mtime
+            path for path, mtime in current_files.items() if cached.get(path) != mtime
         ]
 
     def get_deleted_paths(self, current_files: dict[str, float]) -> list[str]:
@@ -204,35 +243,43 @@ class EmbeddingCache:
         return result[0] if result else 0
 
     def load_chunks_readonly(self) -> ChunkRows | None:
-        """Load every chunk through a read-only connection.
+        """Load every chunk without taking the write lock.
 
-        A separate read-only connection avoids lock conflicts with another
-        process that holds the write lock.
+        In the process that is indexing, DuckDB refuses a second (read-only)
+        connection to the same file, so a cursor on the open connection is
+        used instead; it sees committed rows. Other processes open the file
+        read-only.
 
         Returns:
             All chunks, or None if the cache doesn't exist or can't be read.
         """
+        conn = self._conn
+        if conn is not None:
+            try:
+                return self._read_chunks(conn.cursor())
+            except duckdb.Error:
+                pass  # closed by the indexer meanwhile; open the file instead
         if not self.cache_path.exists():
             return None
         try:
-            with duckdb.connect(str(self.cache_path), read_only=True) as conn:
-                relation: Any = conn.sql(
-                    "SELECT path, line, heading, text, vector FROM chunks "
-                    "ORDER BY path, idx"
-                )
-                # DuckDB 2 has to_arrow_table; 1.x has arrow()
-                to_arrow = getattr(relation, "to_arrow_table", None) or relation.arrow
-                table = to_arrow()
-                if isinstance(table, pa.RecordBatchReader):
-                    table = table.read_all()
+            with duckdb.connect(str(self.cache_path), read_only=True) as ro:
+                return self._read_chunks(ro)
         except _READONLY_ERRORS:
             return None
+
+    def _read_chunks(self, conn: duckdb.DuckDBPyConnection) -> ChunkRows:
+        relation: Any = conn.sql(
+            "SELECT path, line, heading, text, vector FROM chunks ORDER BY path, idx"
+        )
+        # DuckDB 2 has to_arrow_table; 1.x has arrow()
+        to_arrow = getattr(relation, "to_arrow_table", None) or relation.arrow
+        table = to_arrow()
+        if isinstance(table, pa.RecordBatchReader):
+            table = table.read_all()
         dim = self._model.get_dimension()
         # Read the vectors straight into one float32 array; going through Python
         # lists would create a float object per number (hundreds of MB)
         vector_column = table.column("vector").combine_chunks()
-        if isinstance(vector_column, pa.ChunkedArray):
-            vector_column = vector_column.combine_chunks()
         flat = vector_column.flatten().to_numpy(zero_copy_only=False)
         return ChunkRows(
             paths=table.column("path").to_pylist(),
@@ -241,25 +288,6 @@ class EmbeddingCache:
             texts=table.column("text").to_pylist(),
             vectors=np.ascontiguousarray(flat, dtype=np.float32).reshape(-1, dim),
         )
-
-    def get_all_readonly(self) -> dict[str, np.ndarray]:
-        """Get one vector per file (the normalized mean of its chunks).
-
-        Backs the `embedding` column of the query tool.
-
-        Returns:
-            Dictionary mapping path to vector. Empty if the cache can't be read.
-        """
-        rows = self.load_chunks_readonly()
-        if rows is None or not len(rows):
-            return {}
-        result: dict[str, np.ndarray] = {}
-        paths = np.array(rows.paths)
-        for path in dict.fromkeys(rows.paths):
-            mean = rows.vectors[paths == path].mean(axis=0)
-            norm = float(np.linalg.norm(mean))
-            result[path] = mean / norm if norm else mean
-        return result
 
     def compact_if_needed(
         self, growth: float = 1.25, min_growth_bytes: int = 8 * 2**20
@@ -294,7 +322,8 @@ class EmbeddingCache:
         compact.unlink(missing_ok=True)
         name = self.conn.execute("SELECT current_database()").fetchone()
         assert name is not None
-        self.conn.execute(f"ATTACH '{compact}' AS compact_target")
+        quoted = str(compact).replace("'", "''")
+        self.conn.execute(f"ATTACH '{quoted}' AS compact_target")
         self.conn.execute(f'COPY FROM DATABASE "{name[0]}" TO compact_target')
         self.conn.execute("DETACH compact_target")
         self.close()

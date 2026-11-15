@@ -1,5 +1,6 @@
 """Tests for semantic indexer module."""
 
+import os
 import time
 from pathlib import Path
 from typing import Generator
@@ -179,3 +180,32 @@ class TestEmbeddingIndexer:
         files = list(base_dir.glob("*.md"))
         self._run(EmbeddingIndexer(cache, mock_model, lambda: files, base_dir))
         assert cache._conn is None
+
+    def test_failed_run_reports_error_and_keeps_index(
+        self, cache: EmbeddingCache, mock_model: MagicMock, base_dir: Path
+    ) -> None:
+        f = self._create_md_file(base_dir, "a.md", LONG)
+        indexer = EmbeddingIndexer(cache, mock_model, lambda: [f], base_dir)
+        self._run(indexer)
+        assert indexer.last_run.indexed == 1
+
+        mock_model.encode_documents.side_effect = RuntimeError("model download failed")
+        f.write_text(f"---\ntitle: a\n---\nChanged. {LONG}")
+        os.utime(f, (f.stat().st_atime, f.stat().st_mtime + 10))
+        self._run(indexer)
+
+        assert indexer.state == IndexerState.READY
+        assert "model download failed" in (indexer.last_run.error or "")
+        rows = cache.load_chunks_readonly()
+        assert rows is not None and rows.texts == [LONG]  # previous chunks kept
+
+    def test_unreadable_file_counted_as_failed(
+        self, cache: EmbeddingCache, mock_model: MagicMock, base_dir: Path
+    ) -> None:
+        bad = base_dir / "bad.md"
+        bad.write_bytes(b"\xff\xfe invalid utf-8 " * 5)
+        good = self._create_md_file(base_dir, "good.md", LONG)
+        indexer = EmbeddingIndexer(cache, mock_model, lambda: [bad, good], base_dir)
+        self._run(indexer)
+        assert indexer.last_run.failed == 1
+        assert indexer.last_run.indexed == 1

@@ -25,8 +25,11 @@ class SemanticContext:
 
     @property
     def is_ready(self) -> bool:
-        """Check if indexing is complete and ready for semantic search."""
-        return self.indexer.state == IndexerState.READY
+        """Whether an index exists: an indexing run has finished in this process.
+
+        Stays true while a later refresh runs; the previous index is served.
+        """
+        return self.indexer.generation > 0
 
     def ensure_index(self, wait_seconds: float = 0.0) -> None:
         """Start indexing if it has never run, and wait up to wait_seconds."""
@@ -38,7 +41,8 @@ class SemanticContext:
     def search_index(self) -> SearchIndex | None:
         """In-memory search index, reloaded after each indexing run.
 
-        Returns None if the cache can't be read yet.
+        Returns None only if no index has been loaded yet and the cache can't
+        be read.
         """
         path = self.cache.cache_path
         mtime = path.stat().st_mtime if path.exists() else 0.0
@@ -46,10 +50,11 @@ class SemanticContext:
         with self._lock:
             if self._index is None or self._index_key != key:
                 rows = self.cache.load_chunks_readonly()
-                if rows is None:
-                    return None
-                self._index = SearchIndex(rows)
-                self._index_key = key
+                if rows is not None:
+                    self._index = SearchIndex(rows)
+                    self._index_key = key
+                # If the cache can't be read right now, keep serving the
+                # previous index rather than returning nothing
             return self._index
 
 
