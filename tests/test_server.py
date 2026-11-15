@@ -85,14 +85,14 @@ class TestQueryInspect:
 
     def test_basic_schema(self, temp_base_dir: Path) -> None:
         """Get schema from files."""
-        result = server_module.query_inspect.fn(glob="*.md", **_query_deps())
+        result = server_module.query_inspect(glob="*.md", **_query_deps())
         assert result["file_count"] == 2
         assert "date" in result["schema"]
         assert "tags" in result["schema"]
 
     def test_recursive_glob(self, temp_base_dir: Path) -> None:
         """Get schema with recursive glob."""
-        result = server_module.query_inspect.fn(glob="**/*.md", **_query_deps())
+        result = server_module.query_inspect(glob="**/*.md", **_query_deps())
         assert result["file_count"] == 3
         assert "summary" in result["schema"]
 
@@ -102,7 +102,7 @@ class TestQuery:
 
     def test_select_all(self, temp_base_dir: Path) -> None:
         """Select all files."""
-        result = server_module.query.fn(
+        result = server_module.query(
             glob="**/*.md", sql="SELECT path FROM files ORDER BY path", **_query_deps()
         )
         assert result["row_count"] == 3
@@ -110,7 +110,7 @@ class TestQuery:
 
     def test_where_clause(self, temp_base_dir: Path) -> None:
         """Filter by date."""
-        result = server_module.query.fn(
+        result = server_module.query(
             glob="**/*.md",
             sql="SELECT path FROM files WHERE date >= '2025-11-26'",
             **_query_deps(),
@@ -122,7 +122,7 @@ class TestQuery:
 
     def test_tag_contains(self, temp_base_dir: Path) -> None:
         """Filter by tag using from_json."""
-        result = server_module.query.fn(
+        result = server_module.query(
             glob="**/*.md",
             sql="""SELECT path FROM files
                WHERE list_contains(from_json(tags, '["VARCHAR"]'), 'python')""",
@@ -132,7 +132,7 @@ class TestQuery:
 
     def test_tag_aggregation(self, temp_base_dir: Path) -> None:
         """Aggregate tags using from_json."""
-        result = server_module.query.fn(
+        result = server_module.query(
             glob="**/*.md",
             sql="""
             SELECT tag, COUNT(*) AS count
@@ -153,7 +153,7 @@ class TestQuery:
         secret = tmp_path_factory.mktemp("outside") / "secret.txt"
         secret.write_text("secret")
         with pytest.raises(Exception, match="Permission Error"):
-            server_module.query.fn(
+            server_module.query(
                 glob="**/*.md",
                 sql=f"SELECT * FROM read_text('{secret}')",
                 **_query_deps(),
@@ -165,7 +165,7 @@ class TestQuery:
         """SQL cannot write files with COPY ... TO."""
         target = tmp_path_factory.mktemp("outside") / "out.csv"
         with pytest.raises(Exception, match="Permission Error"):
-            server_module.query.fn(
+            server_module.query(
                 glob="**/*.md",
                 sql=f"COPY (SELECT path FROM files) TO '{target}'",
                 **_query_deps(),
@@ -175,7 +175,7 @@ class TestQuery:
     def test_cannot_reenable_external_access(self, temp_base_dir: Path) -> None:
         """SQL cannot lift the restriction."""
         with pytest.raises(Exception, match="Cannot change configuration"):
-            server_module.query.fn(
+            server_module.query(
                 glob="**/*.md",
                 sql="SET enable_external_access = true",
                 **_query_deps(),
@@ -186,7 +186,7 @@ class TestQuery:
         outside = temp_base_dir.parent / f"{temp_base_dir.name}-outside.md"
         outside.write_text("---\ntitle: outside\n---\n")
         try:
-            result = server_module.query.fn(
+            result = server_module.query(
                 glob=f"../{outside.name}",
                 sql="SELECT path FROM files",
                 **_query_deps(),
@@ -201,7 +201,7 @@ class TestUpdate:
 
     def test_set_property(self, temp_base_dir: Path) -> None:
         """Set a property on a file."""
-        result = server_module.update.fn(
+        result = server_module.update(
             path="a.md", set={"status": "published"}, **_settings_dep()
         )
         assert result["path"] == "a.md"
@@ -210,12 +210,12 @@ class TestUpdate:
 
     def test_unset_property(self, temp_base_dir: Path) -> None:
         """Unset a property from a file."""
-        result = server_module.update.fn(path="b.md", unset=["tags"], **_settings_dep())
+        result = server_module.update(path="b.md", unset=["tags"], **_settings_dep())
         assert "tags" not in result["frontmatter"]
 
     def test_set_and_unset(self, temp_base_dir: Path) -> None:
         """Set and unset properties."""
-        result = server_module.update.fn(
+        result = server_module.update(
             path="subdir/c.md",
             set={"status": "done"},
             unset=["summary"],
@@ -228,16 +228,12 @@ class TestUpdate:
     def test_file_not_found(self, temp_base_dir: Path) -> None:
         """Error when file does not exist."""
         with pytest.raises(FileNotFoundError):
-            server_module.update.fn(
-                path="nonexistent.md", set={"x": 1}, **_settings_dep()
-            )
+            server_module.update(path="nonexistent.md", set={"x": 1}, **_settings_dep())
 
     def test_path_outside_base_dir(self, temp_base_dir: Path) -> None:
         """Error when path is outside base_dir."""
         with pytest.raises(ValueError):
-            server_module.update.fn(
-                path="../outside.md", set={"x": 1}, **_settings_dep()
-            )
+            server_module.update(path="../outside.md", set={"x": 1}, **_settings_dep())
 
 
 class TestBatchUpdate:
@@ -245,7 +241,7 @@ class TestBatchUpdate:
 
     def test_set_property_all_files(self, temp_base_dir: Path) -> None:
         """Set a property on all matching files."""
-        result = server_module.batch_update.fn(
+        result = server_module.batch_update(
             glob="*.md", set={"status": "reviewed"}, **_settings_dep()
         )
         assert result["updated_count"] == 2
@@ -257,7 +253,7 @@ class TestBatchUpdate:
 
     def test_recursive_glob(self, temp_base_dir: Path) -> None:
         """Update all files including subdirectories."""
-        result = server_module.batch_update.fn(
+        result = server_module.batch_update(
             glob="**/*.md", set={"batch": True}, **_settings_dep()
         )
         assert result["updated_count"] == 3
@@ -265,7 +261,7 @@ class TestBatchUpdate:
 
     def test_unset_property(self, temp_base_dir: Path) -> None:
         """Unset a property from all matching files."""
-        result = server_module.batch_update.fn(
+        result = server_module.batch_update(
             glob="**/*.md", unset=["tags"], **_settings_dep()
         )
         assert result["updated_count"] == 3
@@ -275,7 +271,7 @@ class TestBatchUpdate:
 
     def test_set_and_unset(self, temp_base_dir: Path) -> None:
         """Set and unset properties in batch."""
-        result = server_module.batch_update.fn(
+        result = server_module.batch_update(
             glob="**/*.md",
             set={"new_prop": "value"},
             unset=["date"],
@@ -289,7 +285,7 @@ class TestBatchUpdate:
 
     def test_no_matching_files(self, temp_base_dir: Path) -> None:
         """Handle no matching files gracefully."""
-        result = server_module.batch_update.fn(
+        result = server_module.batch_update(
             glob="*.txt", set={"x": 1}, **_settings_dep()
         )
         assert result["updated_count"] == 0
@@ -297,7 +293,7 @@ class TestBatchUpdate:
 
     def test_no_warnings_key_when_success(self, temp_base_dir: Path) -> None:
         """Warnings key is absent when all updates succeed."""
-        result = server_module.batch_update.fn(
+        result = server_module.batch_update(
             glob="*.md", set={"status": "ok"}, **_settings_dep()
         )
         assert result["updated_count"] == 2
@@ -310,7 +306,7 @@ class TestBatchUpdate:
             "---\ninvalid: [unclosed\n---\n# Content"
         )
 
-        result = server_module.batch_update.fn(
+        result = server_module.batch_update(
             glob="*.md", set={"status": "ok"}, **_settings_dep()
         )
         # a.md and b.md should succeed, malformed.md should fail
@@ -325,7 +321,7 @@ class TestBatchArrayAdd:
 
     def test_add_value_to_existing_array(self, temp_base_dir: Path) -> None:
         """Add a value to an existing array property."""
-        result = server_module.batch_array_add.fn(
+        result = server_module.batch_array_add(
             glob="*.md", property="tags", value="new-tag", **_settings_dep()
         )
         assert result["updated_count"] == 2
@@ -336,7 +332,7 @@ class TestBatchArrayAdd:
 
     def test_skip_duplicate_value(self, temp_base_dir: Path) -> None:
         """Skip files where value already exists (allow_duplicates=False)."""
-        result = server_module.batch_array_add.fn(
+        result = server_module.batch_array_add(
             glob="*.md", property="tags", value="python", **_settings_dep()
         )
         # a.md has [python, mcp], b.md has [duckdb]
@@ -346,7 +342,7 @@ class TestBatchArrayAdd:
 
     def test_allow_duplicates(self, temp_base_dir: Path) -> None:
         """Allow duplicate values when allow_duplicates=True."""
-        result = server_module.batch_array_add.fn(
+        result = server_module.batch_array_add(
             glob="*.md",
             property="tags",
             value="python",
@@ -360,7 +356,7 @@ class TestBatchArrayAdd:
 
     def test_create_property_if_not_exists(self, temp_base_dir: Path) -> None:
         """Create array property if it doesn't exist."""
-        result = server_module.batch_array_add.fn(
+        result = server_module.batch_array_add(
             glob="*.md", property="categories", value="blog", **_settings_dep()
         )
         assert result["updated_count"] == 2
@@ -370,7 +366,7 @@ class TestBatchArrayAdd:
 
     def test_skip_non_array_property(self, temp_base_dir: Path) -> None:
         """Skip and warn when property is not an array."""
-        result = server_module.batch_array_add.fn(
+        result = server_module.batch_array_add(
             glob="*.md", property="date", value="value", **_settings_dep()
         )
         assert result["updated_count"] == 0
@@ -379,7 +375,7 @@ class TestBatchArrayAdd:
 
     def test_value_as_array_not_flattened(self, temp_base_dir: Path) -> None:
         """Array value should be added as single element, not flattened."""
-        result = server_module.batch_array_add.fn(
+        result = server_module.batch_array_add(
             glob="*.md", property="tags", value=["nested", "array"], **_settings_dep()
         )
         assert result["updated_count"] == 2
@@ -393,7 +389,7 @@ class TestBatchArrayRemove:
 
     def test_remove_value_from_array(self, temp_base_dir: Path) -> None:
         """Remove a value from array property."""
-        result = server_module.batch_array_remove.fn(
+        result = server_module.batch_array_remove(
             glob="**/*.md", property="tags", value="python", **_settings_dep()
         )
         # a.md and c.md have python tag
@@ -404,7 +400,7 @@ class TestBatchArrayRemove:
 
     def test_skip_if_value_not_exists(self, temp_base_dir: Path) -> None:
         """Skip files where value doesn't exist."""
-        result = server_module.batch_array_remove.fn(
+        result = server_module.batch_array_remove(
             glob="*.md", property="tags", value="nonexistent", **_settings_dep()
         )
         assert result["updated_count"] == 0
@@ -412,7 +408,7 @@ class TestBatchArrayRemove:
 
     def test_skip_if_property_not_exists(self, temp_base_dir: Path) -> None:
         """Skip files where property doesn't exist."""
-        result = server_module.batch_array_remove.fn(
+        result = server_module.batch_array_remove(
             glob="*.md", property="categories", value="value", **_settings_dep()
         )
         assert result["updated_count"] == 0
@@ -420,7 +416,7 @@ class TestBatchArrayRemove:
 
     def test_skip_non_array_property(self, temp_base_dir: Path) -> None:
         """Skip and warn when property is not an array."""
-        result = server_module.batch_array_remove.fn(
+        result = server_module.batch_array_remove(
             glob="*.md", property="date", value="value", **_settings_dep()
         )
         assert result["updated_count"] == 0
@@ -432,7 +428,7 @@ class TestBatchArrayReplace:
 
     def test_replace_value_in_array(self, temp_base_dir: Path) -> None:
         """Replace a value in array property."""
-        result = server_module.batch_array_replace.fn(
+        result = server_module.batch_array_replace(
             glob="**/*.md",
             property="tags",
             old_value="python",
@@ -447,7 +443,7 @@ class TestBatchArrayReplace:
 
     def test_skip_if_old_value_not_exists(self, temp_base_dir: Path) -> None:
         """Skip files where old_value doesn't exist."""
-        result = server_module.batch_array_replace.fn(
+        result = server_module.batch_array_replace(
             glob="*.md",
             property="tags",
             old_value="nonexistent",
@@ -459,7 +455,7 @@ class TestBatchArrayReplace:
 
     def test_skip_if_property_not_exists(self, temp_base_dir: Path) -> None:
         """Skip files where property doesn't exist."""
-        result = server_module.batch_array_replace.fn(
+        result = server_module.batch_array_replace(
             glob="*.md",
             property="categories",
             old_value="old",
@@ -471,7 +467,7 @@ class TestBatchArrayReplace:
 
     def test_skip_non_array_property(self, temp_base_dir: Path) -> None:
         """Skip and warn when property is not an array."""
-        result = server_module.batch_array_replace.fn(
+        result = server_module.batch_array_replace(
             glob="*.md",
             property="date",
             old_value="old",
@@ -487,7 +483,7 @@ class TestBatchArraySort:
 
     def test_sort_array_ascending(self, temp_base_dir: Path) -> None:
         """Sort array in ascending order."""
-        result = server_module.batch_array_sort.fn(
+        result = server_module.batch_array_sort(
             glob="*.md", property="tags", **_settings_dep()
         )
         # a.md has [python, mcp] -> [mcp, python] (updated)
@@ -500,7 +496,7 @@ class TestBatchArraySort:
 
     def test_sort_array_descending(self, temp_base_dir: Path) -> None:
         """Sort array in descending order."""
-        result = server_module.batch_array_sort.fn(
+        result = server_module.batch_array_sort(
             glob="*.md", property="tags", reverse=True, **_settings_dep()
         )
         # a.md has [python, mcp] - already descending order (skipped)
@@ -510,11 +506,9 @@ class TestBatchArraySort:
     def test_sort_array_descending_updated(self, temp_base_dir: Path) -> None:
         """Sort array in descending order when not already sorted."""
         # First sort ascending
-        server_module.batch_array_sort.fn(
-            glob="*.md", property="tags", **_settings_dep()
-        )
+        server_module.batch_array_sort(glob="*.md", property="tags", **_settings_dep())
         # Now a.md has [mcp, python], reverse should update it
-        result = server_module.batch_array_sort.fn(
+        result = server_module.batch_array_sort(
             glob="*.md", property="tags", reverse=True, **_settings_dep()
         )
         assert result["updated_count"] == 1
@@ -525,11 +519,9 @@ class TestBatchArraySort:
     def test_skip_if_already_sorted(self, temp_base_dir: Path) -> None:
         """Skip files where array is already sorted."""
         # First sort
-        server_module.batch_array_sort.fn(
-            glob="*.md", property="tags", **_settings_dep()
-        )
+        server_module.batch_array_sort(glob="*.md", property="tags", **_settings_dep())
         # Second sort should skip
-        result = server_module.batch_array_sort.fn(
+        result = server_module.batch_array_sort(
             glob="*.md", property="tags", **_settings_dep()
         )
         assert result["updated_count"] == 0
@@ -538,14 +530,14 @@ class TestBatchArraySort:
         """Skip files with empty array."""
         (temp_base_dir / "empty.md").write_text("---\ntags: []\n---\n# Empty")
 
-        result = server_module.batch_array_sort.fn(
+        result = server_module.batch_array_sort(
             glob="empty.md", property="tags", **_settings_dep()
         )
         assert result["updated_count"] == 0
 
     def test_skip_if_property_not_exists(self, temp_base_dir: Path) -> None:
         """Skip files where property doesn't exist."""
-        result = server_module.batch_array_sort.fn(
+        result = server_module.batch_array_sort(
             glob="*.md", property="categories", **_settings_dep()
         )
         assert result["updated_count"] == 0
@@ -553,7 +545,7 @@ class TestBatchArraySort:
 
     def test_skip_non_array_property(self, temp_base_dir: Path) -> None:
         """Skip and warn when property is not an array."""
-        result = server_module.batch_array_sort.fn(
+        result = server_module.batch_array_sort(
             glob="*.md", property="date", **_settings_dep()
         )
         assert result["updated_count"] == 0
@@ -567,7 +559,7 @@ class TestBatchArrayUnique:
         """Remove duplicate values from array."""
         (temp_base_dir / "dup.md").write_text("---\ntags: [a, b, a, c, b]\n---\n# Dup")
 
-        result = server_module.batch_array_unique.fn(
+        result = server_module.batch_array_unique(
             glob="dup.md", property="tags", **_settings_dep()
         )
         assert result["updated_count"] == 1
@@ -581,7 +573,7 @@ class TestBatchArrayUnique:
         content = "---\ntags: [z, a, z, m, a]\n---\n# Order"
         (temp_base_dir / "order.md").write_text(content)
 
-        result = server_module.batch_array_unique.fn(
+        result = server_module.batch_array_unique(
             glob="order.md", property="tags", **_settings_dep()
         )
         assert result["updated_count"] == 1
@@ -591,7 +583,7 @@ class TestBatchArrayUnique:
 
     def test_skip_if_no_duplicates(self, temp_base_dir: Path) -> None:
         """Skip files where array has no duplicates."""
-        result = server_module.batch_array_unique.fn(
+        result = server_module.batch_array_unique(
             glob="a.md", property="tags", **_settings_dep()
         )
         # a.md has [python, mcp] - no duplicates
@@ -601,14 +593,14 @@ class TestBatchArrayUnique:
         """Skip files with empty array."""
         (temp_base_dir / "empty.md").write_text("---\ntags: []\n---\n# Empty")
 
-        result = server_module.batch_array_unique.fn(
+        result = server_module.batch_array_unique(
             glob="empty.md", property="tags", **_settings_dep()
         )
         assert result["updated_count"] == 0
 
     def test_skip_single_element(self, temp_base_dir: Path) -> None:
         """Skip files with single element array."""
-        result = server_module.batch_array_unique.fn(
+        result = server_module.batch_array_unique(
             glob="b.md", property="tags", **_settings_dep()
         )
         # b.md has [duckdb] - single element
@@ -616,7 +608,7 @@ class TestBatchArrayUnique:
 
     def test_skip_if_property_not_exists(self, temp_base_dir: Path) -> None:
         """Skip files where property doesn't exist."""
-        result = server_module.batch_array_unique.fn(
+        result = server_module.batch_array_unique(
             glob="*.md", property="categories", **_settings_dep()
         )
         assert result["updated_count"] == 0
@@ -624,7 +616,7 @@ class TestBatchArrayUnique:
 
     def test_skip_non_array_property(self, temp_base_dir: Path) -> None:
         """Skip and warn when property is not an array."""
-        result = server_module.batch_array_unique.fn(
+        result = server_module.batch_array_unique(
             glob="*.md", property="date", **_settings_dep()
         )
         assert result["updated_count"] == 0
@@ -676,7 +668,7 @@ class TestSemanticSearchTools:
         self, semantic_base_dir: Path, mock_semantic_context
     ) -> None:
         """index_status returns state when enabled."""
-        result = server_module.index_status.fn(**_semantic_dep())
+        result = server_module.index_status(**_semantic_dep())
         assert "state" in result
         assert result["state"] in ["idle", "indexing", "ready"]
 
@@ -684,8 +676,8 @@ class TestSemanticSearchTools:
         self, semantic_base_dir: Path, mock_semantic_context
     ) -> None:
         """index_wait returns success=true when indexing completes."""
-        server_module.index_refresh.fn(**_semantic_dep())
-        result = server_module.index_wait.fn(timeout=5.0, **_semantic_dep())
+        server_module.index_refresh(**_semantic_dep())
+        result = server_module.index_wait(timeout=5.0, **_semantic_dep())
 
         assert result["success"] is True
         assert result["state"] == "ready"
@@ -694,7 +686,7 @@ class TestSemanticSearchTools:
         self, semantic_base_dir: Path, mock_semantic_context
     ) -> None:
         """index_wait returns success=true immediately when idle."""
-        result = server_module.index_wait.fn(timeout=0.1, **_semantic_dep())
+        result = server_module.index_wait(timeout=0.1, **_semantic_dep())
 
         # When idle (never started), wait returns immediately with success=true
         assert result["success"] is True
@@ -704,7 +696,7 @@ class TestSemanticSearchTools:
         self, semantic_base_dir: Path, mock_semantic_context
     ) -> None:
         """index_refresh starts indexing when enabled."""
-        result = server_module.index_refresh.fn(**_semantic_dep())
+        result = server_module.index_refresh(**_semantic_dep())
         assert "message" in result
         assert result["message"] in ["Indexing started", "Indexing already in progress"]
 
@@ -714,10 +706,10 @@ class TestSemanticSearchTools:
         self, semantic_base_dir: Path, mock_semantic_context
     ) -> None:
         """query can use embed() function after indexing."""
-        server_module.index_refresh.fn(**_semantic_dep())
+        server_module.index_refresh(**_semantic_dep())
         mock_semantic_context.indexer.wait(timeout=5.0)
 
-        result = server_module.query.fn(
+        result = server_module.query(
             glob="**/*.md",
             sql="""SELECT path,
                array_cosine_similarity(embedding, embed('test')) as score
@@ -734,10 +726,10 @@ class TestSemanticSearchTools:
         self, semantic_base_dir: Path, mock_semantic_context
     ) -> None:
         """query_inspect includes embedding in schema when semantic search ready."""
-        server_module.index_refresh.fn(**_semantic_dep())
+        server_module.index_refresh(**_semantic_dep())
         mock_semantic_context.indexer.wait(timeout=5.0)
 
-        result = server_module.query_inspect.fn(glob="**/*.md", **_query_deps())
+        result = server_module.query_inspect(glob="**/*.md", **_query_deps())
 
         assert "embedding" in result["schema"]
         assert result["schema"]["embedding"]["type"] == "FLOAT[256]"

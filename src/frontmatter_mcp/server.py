@@ -7,6 +7,7 @@ from typing import Any
 import frontmatter
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
+from mcp.types import ToolAnnotations
 
 from frontmatter_mcp.dependencies import (
     get_file_record_cache,
@@ -93,7 +94,7 @@ def _resolve_path(base_dir: Path, rel_path: str) -> Path:
     return abs_path
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def query_inspect(
     glob: str,
     settings: Settings = Depends(get_settings),
@@ -127,7 +128,7 @@ def query_inspect(
     )
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
 def query(
     glob: str,
     sql: str,
@@ -178,7 +179,7 @@ def query(
     )
 
 
-@mcp.tool(enabled=False)
+@mcp.tool(tags={"semantic"}, annotations=ToolAnnotations(readOnlyHint=True))
 def index_status(
     semantic_ctx: SemanticContext | None = Depends(get_semantic_ctx),
 ) -> Response:
@@ -194,7 +195,7 @@ def index_status(
     return _build_response({"state": semantic_ctx.indexer.state.value})
 
 
-@mcp.tool(enabled=False)
+@mcp.tool(tags={"semantic"}, annotations=ToolAnnotations(readOnlyHint=True))
 def index_wait(
     timeout: float = 60.0,
     semantic_ctx: SemanticContext | None = Depends(get_semantic_ctx),
@@ -222,7 +223,7 @@ def index_wait(
     )
 
 
-@mcp.tool(enabled=False)
+@mcp.tool(tags={"semantic"})
 def index_refresh(
     semantic_ctx: SemanticContext | None = Depends(get_semantic_ctx),
 ) -> Response:
@@ -669,6 +670,10 @@ def batch_array_unique(
     return _build_batch_response(updated_files, warnings)
 
 
+# Semantic search tools stay hidden unless semantic search is enabled in main()
+mcp.disable(tags={"semantic"})
+
+
 def main() -> None:
     """Entry point for the MCP server."""
     settings = get_settings()
@@ -677,9 +682,7 @@ def main() -> None:
         semantic_ctx = get_semantic_ctx()
         if semantic_ctx is not None:
             semantic_ctx.indexer.start()
-            index_status.enable()
-            index_wait.enable()
-            index_refresh.enable()
+            mcp.enable(tags={"semantic"})
 
     mcp.run()
 
