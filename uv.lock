@@ -647,6 +647,8 @@ source = { editable = "." }
 dependencies = [
     { name = "duckdb" },
     { name = "fastmcp" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "pyarrow" },
     { name = "pydantic-settings" },
     { name = "python-frontmatter" },
@@ -681,6 +683,7 @@ dev = [
 requires-dist = [
     { name = "duckdb", specifier = ">=1.0.0,<3.0.0" },
     { name = "fastmcp", specifier = ">=3.2.0,<5.0.0" },
+    { name = "numpy", specifier = ">=1.24.0,<3.0.0" },
     { name = "protobuf", marker = "extra == 'semantic'", specifier = ">=3.0.0,<8.0.0" },
     { name = "pyarrow", specifier = ">=22.0.0,<27.0.0" },
     { name = "pydantic-settings", specifier = ">=2.0.0,<3.0.0" },

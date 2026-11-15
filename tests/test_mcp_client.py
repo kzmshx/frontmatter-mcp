@@ -84,3 +84,20 @@ async def test_update_over_mcp(base_dir: Path) -> None:
     text = (base_dir / "a.md").read_text()
     assert "status: done" in text
     assert text.endswith("Body\n")
+
+
+def test_semantic_enabled_without_extra_keeps_tools_disabled(
+    base_dir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A missing [semantic] extra is reported instead of failing later."""
+    monkeypatch.setenv("FRONTMATTER_ENABLE_SEMANTIC", "true")
+    monkeypatch.setattr(
+        server_module, "_missing_semantic_packages", lambda: ["sentence_transformers"]
+    )
+    monkeypatch.setattr(server_module.mcp, "run", lambda: None)
+    enabled: list[object] = []
+    monkeypatch.setattr(server_module.mcp, "enable", lambda **kw: enabled.append(kw))
+    get_settings.cache_clear()
+    server_module.main()
+    assert enabled == []
+    assert "frontmatter-mcp[semantic]" in capsys.readouterr().err

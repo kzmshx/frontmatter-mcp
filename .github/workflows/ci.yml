@@ -47,6 +47,17 @@ jobs:
       # Benchmarks are excluded from the default run; execute them once so they don't rot
       - run: uv run pytest tests/benchmarks --benchmark-disable -o addopts=""
 
+  # The default install (no [semantic] extra, no dev tools): the server must
+  # import and serve the non-semantic tools
+  test-core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.3.3
+      - run: uv sync --locked --no-dev
+      - run: uv run --no-sync python -c "import frontmatter_mcp.server"
+      - run: uv run --no-sync --with pytest --with anyio pytest tests/test_mcp_client.py -p no:cacheprovider
+
   # What `uvx` users get: the newest versions pyproject.toml allows, ignoring uv.lock
   test-latest:
     runs-on: ubuntu-latest
@@ -75,7 +86,7 @@ jobs:
   # Single required check for the branch ruleset
   ci-ok:
     if: always()
-    needs: [lint, typecheck, test, test-latest, audit]
+    needs: [lint, typecheck, test, test-core, test-latest, audit]
     runs-on: ubuntu-latest
     steps:
       - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')
