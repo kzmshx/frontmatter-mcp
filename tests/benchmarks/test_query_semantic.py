@@ -11,9 +11,10 @@ from pytest_benchmark.fixture import BenchmarkFixture
 from frontmatter_mcp.files import FileRecordCache, parse_files
 from frontmatter_mcp.query import create_base_connection, execute_query
 from frontmatter_mcp.semantic import add_semantic_columns
+from frontmatter_mcp.semantic.cache import ChunkRows
 from frontmatter_mcp.semantic.context import SemanticContext
 
-# Smaller file counts for semantic tests (VSS extension load is slow)
+# Smaller file counts for semantic tests
 FILE_COUNTS = [100, 500]
 
 
@@ -23,10 +24,17 @@ def _create_mock_semantic_context(paths: list[str], dim: int = 256) -> SemanticC
 
     mock_model = MagicMock()
     mock_model.get_dimension.return_value = dim
-    mock_model.encode.return_value = np.random.rand(dim).astype(np.float32)
+    mock_model.encode_query.return_value = np.random.rand(dim).astype(np.float32)
 
+    sorted_paths = sorted(embeddings)
     mock_cache = MagicMock()
-    mock_cache.get_all_readonly.return_value = embeddings
+    mock_cache.load_chunks_readonly.return_value = ChunkRows(
+        paths=sorted_paths,
+        lines=np.ones(len(sorted_paths), dtype=np.int64),
+        headings=[""] * len(sorted_paths),
+        texts=[""] * len(sorted_paths),
+        vectors=np.array([embeddings[p] for p in sorted_paths], dtype=np.float32),
+    )
 
     mock_indexer = MagicMock()
 

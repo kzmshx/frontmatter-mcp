@@ -98,18 +98,21 @@ class TestEmbeddingCache:
         assert sorted(cache.get_stale_paths(current)) == ["changed.md", "new.md"]
         assert cache.get_deleted_paths(current) == ["gone.md"]
 
-    def test_get_all_readonly_is_normalized_mean(self, cache: EmbeddingCache) -> None:
-        v = vectors(2)
-        cache.set_file("a.md", 1000.0, chunks("one", "two"), v)
-        cache.close()
-        result = cache.get_all_readonly()
-        mean = v.mean(axis=0)
-        np.testing.assert_allclose(result["a.md"], mean / np.linalg.norm(mean), 1e-5)
+    def test_load_while_write_connection_is_open(self, cache: EmbeddingCache) -> None:
+        """The indexing process can read its own cache mid-run."""
+        cache.set_file("a.md", 1000.0, chunks("one"), vectors(1))
+        assert cache._conn is not None  # still open, as during indexing
+        rows = cache.load_chunks_readonly()
+        assert rows is not None and rows.texts == ["one"]
+
+    def test_older_mtime_is_stale(self, cache: EmbeddingCache) -> None:
+        """A file restored with an older mtime is re-indexed."""
+        cache.set_file("a.md", 2000.0, chunks("x"), vectors(1))
+        assert cache.get_stale_paths({"a.md": 1000.0}) == ["a.md"]
 
     def test_readonly_when_db_missing(self, tmp_path: Path) -> None:
         cache = EmbeddingCache(tmp_path / "none", model=create_mock_model())
         assert cache.load_chunks_readonly() is None
-        assert cache.get_all_readonly() == {}
 
     def test_rebuilt_when_model_changes(self, cache_dir: Path) -> None:
         first = EmbeddingCache(cache_dir, model=create_mock_model(name="a"))

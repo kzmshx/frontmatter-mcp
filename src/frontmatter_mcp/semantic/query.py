@@ -3,6 +3,7 @@
 from typing import cast
 
 import duckdb
+import numpy as np
 import pyarrow as pa
 
 from frontmatter_mcp.semantic.context import SemanticContext
@@ -35,28 +36,31 @@ def add_semantic_columns(
         f"FLOAT[{dim}]",
     )
 
-    # Add embedding column to files table
-    conn.execute(f"ALTER TABLE files ADD COLUMN embedding FLOAT[{dim}]")
-
-    # Get embeddings from cache using read-only connection
-    # This avoids lock conflicts when another process holds the write lock
-    embeddings = ctx.cache.get_all_readonly()
-    if embeddings:
-        paths = list(embeddings.keys())
-        vectors = [v.tolist() for v in embeddings.values()]
-
-        arrow_table = pa.table({"path": paths, "vector": vectors})
+    # Document vectors come from the in-memory search index (built once per
+    # indexing run), so a query does not re-read the cache file
+    index = ctx.search_index()
+    vectors = index.document_vectors() if index is not None else {}
+    if vectors:
+        matrix = np.stack(list(vectors.values())).astype(np.float32)
+        arrow_table = pa.table(
+            {
+                "path": list(vectors.keys()),
+                "vector": pa.FixedSizeListArray.from_arrays(
+                    pa.array(matrix.ravel()), dim
+                ),
+            }
+        )
         conn.register("arrow_embeddings", arrow_table)
         conn.execute(f"""
             CREATE TEMP TABLE embeddings AS
-            SELECT path, vector::FLOAT[{dim}] as vector FROM arrow_embeddings
+            SELECT path, vector::FLOAT[{dim}] AS vector FROM arrow_embeddings
         """)
         conn.unregister("arrow_embeddings")
-
-        # Update files table with embeddings
+    # Add the column, then fill it (rebuilding files with a LEFT JOIN failed on
+    # real vault data with "cannot cast list with length 0 to array")
+    conn.execute(f"ALTER TABLE files ADD COLUMN embedding FLOAT[{dim}]")
+    if vectors:
         conn.execute("""
-            UPDATE files
-            SET embedding = e.vector
-            FROM embeddings e
-            WHERE files.path = e.path
+            UPDATE files SET embedding = e.vector
+            FROM embeddings e WHERE files.path = e.path
         """)

@@ -624,6 +624,16 @@ class TestBatchArrayUnique:
         assert "warnings" in result
 
 
+class TestSemanticDisabled:
+    """Semantic tools fail with a clear message when semantic search is off."""
+
+    def test_search_raises_tool_error(self, temp_base_dir: Path) -> None:
+        from fastmcp.exceptions import ToolError
+
+        with pytest.raises(ToolError, match="FRONTMATTER_ENABLE_SEMANTIC"):
+            server_module.search(query="x", **_query_deps())
+
+
 class TestSemanticSearchTools:
     """Tests for semantic search tools."""
 
@@ -752,7 +762,7 @@ class TestSemanticSearchTools:
         assert top["line"] == 6
         assert top["heading"] == "Evening"
         assert "ダーツ" in top["text"]
-        assert result["index_state"] == "ready"
+        assert result["index"]["state"] == "ready"
 
         filtered = server_module.search(
             query="ダーツ 苛立", where="date > '2025-11-25'", **_query_deps()
@@ -768,7 +778,7 @@ class TestSemanticSearchTools:
         )
         assert mock_semantic_context.indexer.state.value == "idle"
         result = server_module.search(query="煎り番茶", **_query_deps())
-        assert result["index_state"] == "ready"
+        assert result["index"]["state"] == "ready"
         assert result["results"][0]["path"] == "note.md"
 
     def test_server_import_does_not_load_torch(self, semantic_base_dir: Path) -> None:

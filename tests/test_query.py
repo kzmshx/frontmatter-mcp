@@ -11,13 +11,32 @@ from frontmatter_mcp.semantic import add_semantic_columns
 from frontmatter_mcp.semantic.context import SemanticContext
 
 
+def _rows(embeddings: dict[str, Any]) -> Any:
+    """Chunk rows with one chunk per document."""
+    from frontmatter_mcp.semantic.cache import ChunkRows
+
+    paths = sorted(embeddings)
+    dim = len(next(iter(embeddings.values()))) if embeddings else 256
+    return ChunkRows(
+        paths=paths,
+        lines=np.ones(len(paths), dtype=np.int64),
+        headings=[""] * len(paths),
+        texts=[""] * len(paths),
+        vectors=(
+            np.array([embeddings[p] for p in paths], dtype=np.float32)
+            if paths
+            else np.zeros((0, dim), dtype=np.float32)
+        ),
+    )
+
+
 def create_mock_semantic_context(
     embeddings: dict[str, np.ndarray[Any, Any]],
     model: MagicMock,
 ) -> SemanticContext:
     """Create a mock SemanticContext for testing."""
     mock_cache = MagicMock()
-    mock_cache.get_all_readonly.return_value = embeddings
+    mock_cache.load_chunks_readonly.return_value = _rows(embeddings)
     mock_indexer = MagicMock()
     return SemanticContext(model=model, cache=mock_cache, indexer=mock_indexer)
 
@@ -216,6 +235,25 @@ class TestExecuteQuery:
         assert values["c.md"] == "3.14"
         assert values["d.md"] == "True"
         assert values["e.md"] == '["a", "b"]'
+
+
+class TestSemanticNullEmbedding:
+    """Files without an index entry."""
+
+    def test_unindexed_files_get_null_embedding(self) -> None:
+        """Files without chunks are NULL, not an error (outer-join regression)."""
+        records = [{"path": "a.md"}, {"path": "b.md"}]
+        model = MagicMock()
+        model.get_dimension.return_value = 256
+        semantic = create_mock_semantic_context(
+            {"a.md": np.random.rand(256).astype(np.float32)}, model
+        )
+        conn = create_base_connection(records)
+        add_semantic_columns(conn, semantic)
+        result = execute_query(
+            conn, "SELECT path, embedding IS NULL AS missing FROM files ORDER BY path"
+        )
+        assert [r["missing"] for r in result["results"]] == [False, True]
 
 
 class TestSemanticSearch:

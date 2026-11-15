@@ -44,3 +44,20 @@ def test_text_without_heading() -> None:
     assert chunks[0].heading == ""
     assert chunks[0].text == LONG
     assert chunks[0].line == 1
+
+
+def test_tag_lines_are_not_headings() -> None:
+    chunks = chunk_markdown(f"#darts #mood\n{LONG}\n")
+    assert chunks[0].heading == ""
+    assert chunks[0].text.startswith("#darts #mood")
+
+
+def test_hashes_inside_code_fences_are_not_headings() -> None:
+    text = f"# Real\n\n```sh\n# not a heading\necho hi\n```\n{LONG}\n"
+    chunks = chunk_markdown(text)
+    assert [c.heading for c in chunks] == ["Real"]
+    assert "# not a heading" in chunks[0].text
+
+
+def test_closing_hashes_are_stripped() -> None:
+    assert chunk_markdown(f"## Title ##\n{LONG}")[0].heading == "Title"

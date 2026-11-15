@@ -7,6 +7,7 @@ from typing import Any
 import frontmatter
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
+from fastmcp.exceptions import ToolError
 
 from frontmatter_mcp.dependencies import (
     get_file_record_cache,
@@ -175,9 +176,9 @@ def query(
     conn = create_base_connection(records)
 
     # Add semantic search columns if enabled and ready
-    if semantic_ctx is not None:
-        if "embed" in sql.lower():
-            semantic_ctx.ensure_index(wait_seconds=INDEX_WAIT_SECONDS)
+    # Semantic columns cost a search-index load; add them only when used
+    if semantic_ctx is not None and "embed" in sql.lower():
+        semantic_ctx.ensure_index(wait_seconds=INDEX_WAIT_SECONDS)
         if semantic_ctx.is_ready:
             add_semantic_columns(conn, semantic_ctx)
 
@@ -194,6 +195,24 @@ def query(
 
 
 MAX_SEARCH_LIMIT = 50
+
+
+def _require_semantic(semantic_ctx: SemanticContext | None) -> SemanticContext:
+    if semantic_ctx is None:
+        raise ToolError(
+            "Semantic search is disabled. Set FRONTMATTER_ENABLE_SEMANTIC=true "
+            "and install frontmatter-mcp[semantic]."
+        )
+    return semantic_ctx
+
+
+def _index_status(semantic_ctx: SemanticContext) -> dict[str, Any]:
+    indexer = semantic_ctx.indexer
+    return {
+        "state": indexer.state.value,
+        "has_index": semantic_ctx.is_ready,
+        "last_run": indexer.last_run.to_dict() if indexer.generation else None,
+    }
 
 
 @mcp.tool(tags={"semantic"}, annotations=READ_ONLY)
@@ -224,11 +243,12 @@ def search(
 
     Returns:
         Dict with results (path, line, heading, text, score; best first) and
-        index_state. Scores are only comparable within one search. The first
-        search in a session brings the index up to date (usually seconds); if
-        index_state is still "indexing", results cover what is indexed so far.
+        index (state, last run statistics, error). Scores are only comparable
+        within one search. The first search in a session brings the index up
+        to date (usually seconds); if the state is still "indexing", results
+        cover what was indexed so far.
     """
-    assert semantic_ctx is not None
+    semantic_ctx = _require_semantic(semantic_ctx)
     semantic_ctx.ensure_index(wait_seconds=INDEX_WAIT_SECONDS)
     limit = max(1, min(limit, MAX_SEARCH_LIMIT))
     base_dir = settings.base_dir
@@ -254,7 +274,7 @@ def search(
     return _build_response(
         {
             "results": [h.to_dict() for h in hits],
-            "index_state": semantic_ctx.indexer.state.value,
+            "index": _index_status(semantic_ctx),
         },
         warnings,
     )
@@ -267,13 +287,15 @@ def index_status(
     """Get the status of the semantic search index.
 
     Returns:
-        Dict with state ("idle", "indexing", "ready").
-        - idle: Indexing has never been started
-        - indexing: Indexing is in progress
-        - ready: Indexing completed; search, embed() and embedding available
+        Dict with:
+        - state: "idle" (not started in this session; the first search starts
+          it), "indexing" (a run is in progress), or "ready"
+        - has_index: whether search, embed() and embedding are usable. Stays
+          true during a refresh, which serves the previous index
+        - last_run: files indexed, removed, and failed in the last finished
+          run, and the error that stopped it, if any
     """
-    assert semantic_ctx is not None
-    return _build_response({"state": semantic_ctx.indexer.state.value})
+    return _build_response(_index_status(_require_semantic(semantic_ctx)))
 
 
 @mcp.tool(tags={"semantic"}, annotations=READ_ONLY)
@@ -290,18 +312,13 @@ def index_wait(
         timeout: Maximum seconds to wait. Default 60.
 
     Returns:
-        Dict with success (bool) and state.
-        - success=true: Indexing completed or idle (not started)
-        - success=false: Timeout reached while indexing in progress
+        Dict with success and the fields of index_status.
+        - success=true: no run in progress (finished, or never started)
+        - success=false: timeout reached while indexing is in progress
     """
-    assert semantic_ctx is not None
+    semantic_ctx = _require_semantic(semantic_ctx)
     completed = semantic_ctx.indexer.wait(timeout=timeout)
-    return _build_response(
-        {
-            "success": completed,
-            "state": semantic_ctx.indexer.state.value,
-        }
-    )
+    return _build_response({"success": completed} | _index_status(semantic_ctx))
 
 
 @mcp.tool(tags={"semantic"})
@@ -321,7 +338,7 @@ def index_refresh(
     Notes:
         Call this after editing files during a session to update the index.
     """
-    assert semantic_ctx is not None
+    semantic_ctx = _require_semantic(semantic_ctx)
     return _build_response(semantic_ctx.indexer.start())
 
 
