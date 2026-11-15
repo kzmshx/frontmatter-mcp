@@ -10,4 +10,4 @@ Only the latest release receives fixes.
 
 ## Dependencies
 
-Dependabot opens weekly update PRs and security PRs. CI audits both `uv.lock` and the newest versions allowed by `pyproject.toml` with pip-audit, and a weekly scheduled run reports new advisories.
+Dependabot opens one weekly PR with all updates (uv and GitHub Actions, major versions included), plus security PRs as advisories appear. CI audits both `uv.lock` and the newest versions allowed by `pyproject.toml` with pip-audit, and a weekly scheduled run reports new advisories.
