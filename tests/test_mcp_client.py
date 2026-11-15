@@ -102,3 +102,16 @@ def test_semantic_enabled_without_extra_keeps_tools_disabled(
     server_module.main()
     assert enabled == []
     assert "frontmatter-mcp[semantic]" in capsys.readouterr().err
+
+
+def test_semantic_tools_enabled_when_packages_present(
+    base_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("FRONTMATTER_ENABLE_SEMANTIC", "true")
+    monkeypatch.setattr(server_module, "_missing_semantic_packages", lambda: [])
+    monkeypatch.setattr(server_module.mcp, "run", lambda: None)
+    enabled: list[object] = []
+    monkeypatch.setattr(server_module.mcp, "enable", lambda **kw: enabled.append(kw))
+    reset_state()
+    server_module.main()
+    assert enabled == [{"tags": {"semantic"}}]
