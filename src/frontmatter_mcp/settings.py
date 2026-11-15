@@ -7,6 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_CACHE_DIR_NAME = ".frontmatter-mcp"
 DEFAULT_EMBEDDING_MODEL = "cl-nagoya/ruri-v3-30m"
+DEFAULT_RERANKER_MODEL = "hotchpotch/japanese-reranker-xsmall-v2"
 
 
 class Settings(BaseSettings):
@@ -18,6 +19,11 @@ class Settings(BaseSettings):
     frontmatter_enable_semantic: bool = False
     frontmatter_embedding_model: str = DEFAULT_EMBEDDING_MODEL
     frontmatter_cache_dir: Path | None = None
+    # None uses the model's recommended prefixes (set for ruri-v3)
+    frontmatter_embedding_query_prefix: str | None = None
+    frontmatter_embedding_document_prefix: str | None = None
+    # Cross-encoder for the search tool; empty string turns reranking off
+    frontmatter_reranker_model: str = DEFAULT_RERANKER_MODEL
 
     @property
     def base_dir(self) -> Path:
@@ -36,6 +42,11 @@ class Settings(BaseSettings):
     def embedding_model(self) -> str:
         """Embedding model name for semantic search."""
         return self.frontmatter_embedding_model
+
+    @property
+    def reranker_model(self) -> str | None:
+        """Cross-encoder model for search, or None when reranking is off."""
+        return self.frontmatter_reranker_model or None
 
     @property
     def cache_dir(self) -> Path:

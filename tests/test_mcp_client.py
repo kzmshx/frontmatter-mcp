@@ -54,12 +54,20 @@ async def test_semantic_tools_hidden_by_default(base_dir: Path) -> None:
 async def test_read_only_annotations(base_dir: Path) -> None:
     async with Client(server_module.mcp) as client:
         tools = {t.name: t for t in await client.list_tools()}
+
+    def read_only(name: str) -> bool | None:
+        annotations = tools[name].annotations
+        if annotations is None:
+            return None
+        # mcp 2.x renamed readOnlyHint to read_only_hint
+        return getattr(annotations, "read_only_hint", None) or getattr(
+            annotations, "readOnlyHint", None
+        )
+
     for name in READ_ONLY:
-        assert tools[name].annotations is not None
-        assert tools[name].annotations.readOnlyHint is True
+        assert read_only(name) is True
     for name in WRITE:
-        hint = tools[name].annotations.readOnlyHint if tools[name].annotations else None
-        assert hint is not True
+        assert read_only(name) is not True
 
 
 async def test_query_over_mcp(base_dir: Path) -> None:

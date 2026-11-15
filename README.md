@@ -258,6 +258,42 @@ Remove duplicate values from an array property in multiple files.
 { "updated_count": 5, "updated_files": ["a.md", "b.md", ...] }
 ```
 
+### search
+
+Search document text and return the best-matching passage of each document. Finds paraphrases as well as exact names.
+
+This tool is only available when `FRONTMATTER_ENABLE_SEMANTIC=true`.
+
+| Parameter | Type   | Description                                                       |
+| --------- | ------ | ----------------------------------------------------------------- |
+| `query`   | string | What to look for, as a sentence or keywords                       |
+| `glob`    | string | Glob pattern to search within (default `**/*.md`)                 |
+| `where`   | string | Optional SQL condition on frontmatter, same columns as `query`    |
+| `limit`   | number | Maximum documents to return, 1-50 (default 10)                    |
+
+**Example:**
+
+```json
+// Input
+{ "query": "felt lonely on my birthday", "where": "date < '2025-11-01'", "limit": 5 }
+
+// Output
+{
+  "results": [
+    {
+      "path": "daily/2025-10-15.md",
+      "line": 42,
+      "heading": "Timeline",
+      "text": "Timeline\n- 20:48 Nobody around on my birthday ...",
+      "score": 0.9312
+    }
+  ],
+  "index_state": "ready"
+}
+```
+
+`line` is where the passage starts in the file. Scores are only comparable within one search.
+
 ### index_status
 
 Get the status of the semantic search index.
@@ -324,31 +360,50 @@ Files containing Obsidian Templater expressions (e.g., `<% tp.date.now("YYYY-MM-
 
 ### Semantic Search
 
-When semantic search is enabled, you can use the `embed()` function and `embedding` column in SQL queries. After running `index_refresh`, the markdown body content is indexed as vectors.
+Each file's body is split into chunks of about 400 characters at headings and line breaks, and each chunk is embedded. Indexing starts on the first semantic call (`search`, a `query` using `embed()`, or `index_refresh`), not at server startup, and only re-reads files whose mtime changed. Dot directories such as `.obsidian` are skipped.
+
+The `search` tool combines three signals:
+
+1. Dense: cosine similarity of query and chunk embeddings. With ruri-v3 models the recommended prefixes (`検索クエリ: ` / `検索文書: `) are applied
+2. Lexical: BM25 over character bigrams, which needs no Japanese tokenizer and catches exact names and phrases
+3. Rerank: a cross-encoder scores the best chunks of the top candidates from 1 and 2. With the reranker turned off, 1 and 2 are combined by weighted reciprocal rank fusion
+
+On a 1,900-file Japanese vault with 16 queries that each have one known target document, the target ranked first for 2 queries with the previous whole-document embeddings and 13 with this pipeline (top 5: 6 and 15). Reranking adds about 0.3 seconds per query.
+
+SQL access is still available: `embedding` is the normalized mean of a document's chunk vectors, and `embed()` encodes a query.
 
 ```sql
--- Find semantically similar documents
-SELECT path, 1 - array_cosine_distance(embedding, embed('feeling better')) as score
+SELECT path, array_cosine_similarity(embedding, embed('feeling better')) AS score
 FROM files
-ORDER BY score DESC
-LIMIT 10
-
--- Combine with frontmatter filters
-SELECT path, date, 1 - array_cosine_distance(embedding, embed('motivation')) as score
-FROM files
-WHERE date >= '2025-11-01'
+WHERE embedding IS NOT NULL AND date >= '2025-11-01'
 ORDER BY score DESC
 LIMIT 10
 ```
 
 Environment variables:
 
-| Variable                    | Default                               | Description                    |
-| --------------------------- | ------------------------------------- | ------------------------------ |
-| FRONTMATTER_BASE_DIR        | (required)                            | Base directory for files       |
-| FRONTMATTER_ENABLE_SEMANTIC | false                                 | Enable semantic search         |
-| FRONTMATTER_EMBEDDING_MODEL | cl-nagoya/ruri-v3-30m                 | Embedding model name           |
-| FRONTMATTER_CACHE_DIR       | FRONTMATTER_BASE_DIR/.frontmatter-mcp | Cache directory for embeddings |
+| Variable                              | Default                                 | Description                                         |
+| ------------------------------------- | --------------------------------------- | --------------------------------------------------- |
+| FRONTMATTER_BASE_DIR                  | (required)                              | Base directory for files                            |
+| FRONTMATTER_ENABLE_SEMANTIC           | false                                   | Enable semantic search                              |
+| FRONTMATTER_EMBEDDING_MODEL           | cl-nagoya/ruri-v3-30m                   | Embedding model name                                |
+| FRONTMATTER_EMBEDDING_QUERY_PREFIX    | model default (`検索クエリ: ` for ruri-v3) | Prefix added to queries                             |
+| FRONTMATTER_EMBEDDING_DOCUMENT_PREFIX | model default (`検索文書: ` for ruri-v3)   | Prefix added to indexed chunks                      |
+| FRONTMATTER_RERANKER_MODEL            | hotchpotch/japanese-reranker-xsmall-v2  | Cross-encoder for `search`; empty string turns it off |
+| FRONTMATTER_CACHE_DIR                 | FRONTMATTER_BASE_DIR/.frontmatter-mcp   | Cache directory for embeddings                      |
+
+Changing the model or the document prefix, or upgrading from a version before chunked indexing, rebuilds the cache on the next start.
+
+Resource use, measured on a 1,900-file vault (27,700 chunks) on an M-series Mac:
+
+| | |
+| :- | :- |
+| Server memory before any semantic call | about 110 MB (torch and the models are loaded on first use) |
+| Memory after the first search | about 1.1 GB (torch, both models, vectors, BM25 index) |
+| First full index | about 90 s; later runs only re-index changed files (300 files: about 15 s) |
+| One search | about 0.4 s (retrieval about 10 ms, rerank about 0.3 s); the first search also loads the models (a few seconds) |
+| Cache file | about 35 MB; rewritten after indexing once it grows 25% (and 8 MB) past its compact size |
+| Model downloads (Hugging Face cache) | about 150 MB each for the embedding model and the reranker |
 
 ## License
 
