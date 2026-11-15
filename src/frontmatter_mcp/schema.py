@@ -1,4 +1,4 @@
-"""Query schema module for DuckDB table column information."""
+"""Schema of the files table, inferred from frontmatter records."""
 
 from collections import defaultdict
 from typing import Any, NotRequired, TypedDict
@@ -16,8 +16,8 @@ class ColumnInfo(TypedDict):
 Schema = dict[str, ColumnInfo]
 
 
-def create_base_schema(records: list[dict[str, Any]], max_samples: int = 5) -> Schema:
-    """Create base schema with path and frontmatter columns.
+def infer_schema(records: list[dict[str, Any]], max_samples: int = 5) -> Schema:
+    """Infer the type, nullability, and example values of each column.
 
     Extracts column information from parsed frontmatter records.
     All values are treated as strings or arrays in DuckDB queries.

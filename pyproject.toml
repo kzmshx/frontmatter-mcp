@@ -16,6 +16,8 @@ dependencies = [
   "pydantic-settings>=2.0.0,<3.0.0",
   "python-frontmatter>=1.0.0,<2.0.0",
   "ruamel-yaml>=0.18.0,<1.0.0",
+  # pydantic needs typing_extensions.TypedDict for output schemas on Python < 3.12
+  "typing-extensions>=4.10.0",
 ]
 
 [project.optional-dependencies]
@@ -43,15 +45,13 @@ packages = ["src/frontmatter_mcp"]
 
 [dependency-groups]
 dev = [
+    # The project with its semantic extra, so `uv sync` / `uv run` can run every test
+    "frontmatter-mcp[semantic]",
     "mypy>=1.0.0",
-    "numpy>=2.0.0",
-    "protobuf>=3.0.0",
     "pytest>=8.0.0",
     "pytest-benchmark>=5.0.0",
     "pytest-github-actions-annotate-failures>=0.2.0",
     "ruff>=0.14.0",
-    "sentence-transformers>=2.0.0",
-    "sentencepiece>=0.1.0",
 ]
 
 [tool.ruff.lint]

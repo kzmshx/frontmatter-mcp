@@ -3,6 +3,8 @@
 import re
 from dataclasses import dataclass
 
+from frontmatter_mcp.markdown import split_frontmatter
+
 # Target chunk size in characters. A single line longer than this becomes its
 # own chunk rather than being cut in the middle of a sentence.
 MAX_CHUNK_CHARS = 400
@@ -30,12 +32,8 @@ class Chunk:
 
 def split_body(text: str) -> tuple[str, int]:
     """Return (body, 1-based line number where the body starts)."""
-    lines = text.splitlines(keepends=True)
-    if lines and lines[0].rstrip() == "---":
-        for i in range(1, len(lines)):
-            if lines[i].rstrip() == "---":
-                return "".join(lines[i + 1 :]), i + 2
-    return text, 1
+    parts = split_frontmatter(text)
+    return parts.body, parts.body_line
 
 
 def chunk_markdown(text: str) -> list[Chunk]:

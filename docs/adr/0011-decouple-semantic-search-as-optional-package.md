@@ -6,6 +6,8 @@ Date: 2025-12-05
 
 Accepted
 
+Amended by [13. Organize modules by responsibility](0013-organize-modules-by-responsibility.md)
+
 ## Context
 
 Semantic search requires heavy dependencies (sentence-transformers, torch) that significantly increase installation size and startup time. Users who only need frontmatter queries should not pay this cost.

@@ -11,10 +11,7 @@ Pipeline for one query:
    candidate. Without a reranker, the two lists are fused with weighted
    reciprocal rank fusion instead.
 
-Measured on a 1,900-file Japanese Obsidian vault (27,680 chunks) with 16 queries
-that each have one known target document: the target ranked first for 2 queries
-with the previous whole-document embeddings, 12 with dense + BM25 fusion, and 13
-with reranking (top 5: 6, 14, 15). Reranking adds about 0.3 s per query.
+See ADR 0012 for the measurements behind this design.
 """
 
 import threading
@@ -25,7 +22,8 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-from frontmatter_mcp.semantic.cache import ChunkRows
+from frontmatter_mcp.semantic.models import Scorer
+from frontmatter_mcp.semantic.store import ChunkRows
 
 # Documents taken from each of the dense and lexical lists before reranking
 CANDIDATES_PER_LIST = 20
@@ -118,24 +116,6 @@ class SearchHit:
         }
 
 
-class Reranker:
-    """Lazy-loading cross-encoder."""
-
-    def __init__(self, name: str) -> None:
-        self.name = name
-        self._model: Any = None
-        self._lock = threading.Lock()
-
-    def score(self, query: str, texts: list[str]) -> NDArray[np.float32]:
-        with self._lock:
-            if self._model is None:
-                from sentence_transformers import CrossEncoder
-
-                self._model = CrossEncoder(self.name, max_length=512)
-        scores = self._model.predict([(query, t) for t in texts], batch_size=16)
-        return np.asarray(scores, dtype=np.float32)
-
-
 class SearchIndex:
     """In-memory chunks, their vectors, and the BM25 index.
 
@@ -210,7 +190,7 @@ class SearchIndex:
         query: str,
         limit: int,
         allowed_paths: set[str] | None = None,
-        reranker: "Reranker | None" = None,
+        reranker: Scorer | None = None,
     ) -> list[SearchHit]:
         """Run the hybrid pipeline described in the module docstring."""
         if not len(self.rows):

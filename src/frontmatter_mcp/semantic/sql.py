@@ -1,4 +1,4 @@
-"""Semantic search query support module."""
+"""Semantic columns for the query tool's SQL: embedding and embed()."""
 
 from typing import cast
 
@@ -6,40 +6,37 @@ import duckdb
 import numpy as np
 import pyarrow as pa
 
+from frontmatter_mcp.schema import ColumnInfo, Schema
 from frontmatter_mcp.semantic.context import SemanticContext
 
 
-def add_semantic_columns(
-    conn: duckdb.DuckDBPyConnection,
-    ctx: SemanticContext,
-) -> None:
-    """Add semantic search columns and functions to DuckDB connection.
+def add_semantic_schema(schema: Schema, ctx: SemanticContext) -> None:
+    """Describe the embedding column in a schema (mutated in place)."""
+    schema["embedding"] = ColumnInfo(
+        type=f"FLOAT[{ctx.model.get_dimension()}]",
+        nullable=True,  # NULL for files that have no indexed chunks
+    )
 
-    Adds embedding column to files table and registers embed() function.
+
+def add_semantic_columns(conn: duckdb.DuckDBPyConnection, ctx: SemanticContext) -> None:
+    """Add the embedding column to files and register embed().
 
     Args:
-        conn: DuckDB connection with 'files' table already created.
-        ctx: Semantic context with model and cache.
+        conn: DuckDB connection with the files table already created.
+        ctx: Semantic context with a model and an index.
     """
-    # Get dimension from model
     dim = ctx.model.get_dimension()
 
-    # Register embed(): encodes a search query (query prefix, normalized), so
+    # embed() encodes a search query (query prefix, normalized), so
     # array_cosine_similarity(embedding, embed('...')) ranks documents
     def embed_func(text: str) -> list[float]:
         return cast(list[float], ctx.model.encode_query(text).tolist())
 
-    conn.create_function(
-        "embed",
-        embed_func,
-        [str],
-        f"FLOAT[{dim}]",
-    )
+    conn.create_function("embed", embed_func, [str], f"FLOAT[{dim}]")
 
     # Document vectors come from the in-memory search index (built once per
-    # indexing run), so a query does not re-read the cache file
-    index = ctx.search_index()
-    vectors = index.document_vectors() if index is not None else {}
+    # indexing run), so a query does not re-read the store
+    vectors = ctx.document_vectors()
     if vectors:
         matrix = np.stack(list(vectors.values())).astype(np.float32)
         arrow_table = pa.table(

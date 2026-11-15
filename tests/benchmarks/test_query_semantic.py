@@ -8,11 +8,11 @@ import numpy as np
 import pytest
 from pytest_benchmark.fixture import BenchmarkFixture
 
-from frontmatter_mcp.files import FileRecordCache, parse_files
-from frontmatter_mcp.query import create_base_connection, execute_query
+from frontmatter_mcp.records import FileRecordCache, parse_files
 from frontmatter_mcp.semantic import add_semantic_columns
-from frontmatter_mcp.semantic.cache import ChunkRows
 from frontmatter_mcp.semantic.context import SemanticContext
+from frontmatter_mcp.semantic.store import ChunkRows
+from frontmatter_mcp.sql import create_files_connection, execute_query
 
 # Smaller file counts for semantic tests
 FILE_COUNTS = [100, 500]
@@ -28,7 +28,7 @@ def _create_mock_semantic_context(paths: list[str], dim: int = 256) -> SemanticC
 
     sorted_paths = sorted(embeddings)
     mock_cache = MagicMock()
-    mock_cache.load_chunks_readonly.return_value = ChunkRows(
+    mock_cache.load_chunks.return_value = ChunkRows(
         paths=sorted_paths,
         lines=np.ones(len(sorted_paths), dtype=np.int64),
         headings=[""] * len(sorted_paths),
@@ -38,7 +38,7 @@ def _create_mock_semantic_context(paths: list[str], dim: int = 256) -> SemanticC
 
     mock_indexer = MagicMock()
 
-    return SemanticContext(model=mock_model, cache=mock_cache, indexer=mock_indexer)
+    return SemanticContext(model=mock_model, store=mock_cache, indexer=mock_indexer)
 
 
 class TestAddSemanticColumnsBenchmark:
@@ -51,14 +51,14 @@ class TestAddSemanticColumnsBenchmark:
         benchmark_dir_factory: Callable[[int], Path],
         file_count: int,
     ) -> None:
-        """Measure time to add semantic columns (VSS extension + embeddings)."""
+        """Measure time to add semantic columns (semantic columns + embeddings)."""
         base_dir = benchmark_dir_factory(file_count)
         paths = list(base_dir.glob("*.md"))
         records, _ = parse_files(paths, base_dir, FileRecordCache())
         relative_paths = [r["path"] for r in records]
 
         def setup_and_add_semantic() -> None:
-            conn = create_base_connection(records)
+            conn = create_files_connection(records)
             ctx = _create_mock_semantic_context(relative_paths)
             add_semantic_columns(conn, ctx)
 
@@ -82,7 +82,7 @@ class TestSemanticQueryBenchmark:
         relative_paths = [r["path"] for r in records]
 
         # Setup connection with semantic columns
-        conn = create_base_connection(records)
+        conn = create_files_connection(records)
         ctx = _create_mock_semantic_context(relative_paths)
         add_semantic_columns(conn, ctx)
 

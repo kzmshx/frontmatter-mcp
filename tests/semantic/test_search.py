@@ -2,8 +2,8 @@
 
 import numpy as np
 
-from frontmatter_mcp.semantic.cache import ChunkRows
 from frontmatter_mcp.semantic.search import Bm25Index, SearchIndex
+from frontmatter_mcp.semantic.store import ChunkRows
 
 DIM = 4
 
@@ -75,7 +75,7 @@ def test_reranker_decides_order() -> None:
         np.array([1, 0, 0, 0], np.float32),
         "ダーツ苛立",
         3,
-        reranker=FakeReranker(),  # type: ignore[arg-type]
+        reranker=FakeReranker(),
     )
     assert hits[0].path == "b.md"
 

@@ -26,9 +26,7 @@
     ]
   },
   "permissions": {
-    "allow": [
-      "mcp__serena"
-    ],
+    "allow": [],
     "deny": [],
     "ask": []
   },

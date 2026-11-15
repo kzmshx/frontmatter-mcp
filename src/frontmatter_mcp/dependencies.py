@@ -1,54 +1,75 @@
-"""Dependency injection for FastMCP tools.
+"""Application state shared by the tools, exposed through FastMCP Depends.
 
-This module provides singleton-cached dependencies for use with FastMCP's
-Depends system. Each dependency is instantiated once on first use and
-cached for the lifetime of the application.
+The state is created once, on first use: settings from the environment, the
+frontmatter record cache, and (when enabled) the semantic search context.
+Tests replace it with set_state() or clear it with reset_state().
 """
 
-from frontmatter_mcp.files import FileRecordCache
-from frontmatter_mcp.semantic import SemanticContext, get_semantic_context
-from frontmatter_mcp.settings import Settings
-from frontmatter_mcp.settings import get_settings as _get_settings
+import threading
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
-# Singleton caches
-_settings_cache: Settings | None = None
-_semantic_ctx_cache: SemanticContext | None = None
-_file_record_cache_instance: FileRecordCache | None = None
+from frontmatter_mcp.records import FileRecordCache
+from frontmatter_mcp.settings import Settings
+
+if TYPE_CHECKING:
+    from frontmatter_mcp.semantic import SemanticContext
+
+
+@dataclass
+class AppState:
+    """Everything the tools share for the lifetime of the server."""
+
+    settings: Settings
+    file_cache: FileRecordCache = field(default_factory=FileRecordCache)
+    _semantic: "SemanticContext | None" = None
+    _semantic_lock: threading.Lock = field(default_factory=threading.Lock)
+
+    @property
+    def semantic(self) -> "SemanticContext | None":
+        """Semantic search context, created on first use; None when disabled."""
+        if not self.settings.enable_semantic:
+            return None
+        with self._semantic_lock:
+            if self._semantic is None:
+                from frontmatter_mcp.semantic import create_semantic_context
+
+                self._semantic = create_semantic_context(self.settings)
+            return self._semantic
+
+
+_state: AppState | None = None
+_state_lock = threading.Lock()
+
+
+def get_state() -> AppState:
+    """The application state, created from the environment on first use."""
+    global _state
+    with _state_lock:
+        if _state is None:
+            _state = AppState(settings=Settings())  # type: ignore[call-arg]
+        return _state
+
+
+def set_state(state: AppState | None) -> None:
+    """Replace the application state (tests)."""
+    global _state
+    with _state_lock:
+        _state = state
+
+
+def reset_state() -> None:
+    """Drop the application state; the next call rebuilds it (tests)."""
+    set_state(None)
 
 
 def get_settings() -> Settings:
-    """Get application settings (singleton)."""
-    global _settings_cache
-    if _settings_cache is None:
-        _settings_cache = _get_settings()
-    return _settings_cache
+    return get_state().settings
 
 
 def get_file_record_cache() -> FileRecordCache:
-    """Get file record cache (singleton)."""
-    global _file_record_cache_instance
-    if _file_record_cache_instance is None:
-        _file_record_cache_instance = FileRecordCache()
-    return _file_record_cache_instance
+    return get_state().file_cache
 
 
-def get_semantic_ctx() -> SemanticContext | None:
-    """Get semantic context if enabled (singleton).
-
-    Returns None if semantic search is disabled.
-    """
-    global _semantic_ctx_cache
-    settings = get_settings()
-    if not settings.enable_semantic:
-        return None
-    if _semantic_ctx_cache is None:
-        _semantic_ctx_cache = get_semantic_context(settings)
-    return _semantic_ctx_cache
-
-
-def reset_caches() -> None:
-    """Reset all singleton caches. Useful for testing."""
-    global _settings_cache, _semantic_ctx_cache, _file_record_cache_instance
-    _settings_cache = None
-    _semantic_ctx_cache = None
-    _file_record_cache_instance = None
+def get_semantic_ctx() -> "SemanticContext | None":
+    return get_state().semantic

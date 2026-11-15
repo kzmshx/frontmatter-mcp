@@ -6,8 +6,8 @@ from typing import Any, Callable
 import pytest
 from pytest_benchmark.fixture import BenchmarkFixture
 
-from frontmatter_mcp.files import FileRecordCache, parse_files
-from frontmatter_mcp.query import create_base_connection, execute_query
+from frontmatter_mcp.records import FileRecordCache, parse_files
+from frontmatter_mcp.sql import create_files_connection, execute_query
 
 FILE_COUNTS = [100, 500, 1000]
 
@@ -16,7 +16,7 @@ class TestParseFilesBenchmark:
     """Benchmark for parse_files function."""
 
     @pytest.mark.parametrize("file_count", FILE_COUNTS)
-    def test_parse_files_cached_cold(
+    def test_parse_files_cold(
         self,
         benchmark: BenchmarkFixture,
         benchmark_dir_factory: Callable[[int], Path],
@@ -36,7 +36,7 @@ class TestParseFilesBenchmark:
         assert len(warnings) == 0
 
     @pytest.mark.parametrize("file_count", FILE_COUNTS)
-    def test_parse_files_cached_warm(
+    def test_parse_files_warm(
         self,
         benchmark: BenchmarkFixture,
         benchmark_dir_factory: Callable[[int], Path],
@@ -58,7 +58,7 @@ class TestParseFilesBenchmark:
 
 
 class TestCreateConnectionBenchmark:
-    """Benchmark for create_base_connection function."""
+    """Benchmark for create_files_connection function."""
 
     @pytest.mark.parametrize("file_count", FILE_COUNTS)
     def test_create_connection(
@@ -72,7 +72,7 @@ class TestCreateConnectionBenchmark:
         paths = list(base_dir.glob("*.md"))
         records, _ = parse_files(paths, base_dir, FileRecordCache())
 
-        conn = benchmark(create_base_connection, records)
+        conn = benchmark(create_files_connection, records)
 
         result = conn.execute("SELECT COUNT(*) FROM files").fetchone()
         assert result is not None
@@ -93,7 +93,7 @@ class TestExecuteQueryBenchmark:
         base_dir = benchmark_dir_factory(file_count)
         paths = list(base_dir.glob("*.md"))
         records, _ = parse_files(paths, base_dir, FileRecordCache())
-        conn = create_base_connection(records)
+        conn = create_files_connection(records)
 
         result = benchmark(execute_query, conn, "SELECT * FROM files")
 
@@ -110,7 +110,7 @@ class TestExecuteQueryBenchmark:
         base_dir = benchmark_dir_factory(file_count)
         paths = list(base_dir.glob("*.md"))
         records, _ = parse_files(paths, base_dir, FileRecordCache())
-        conn = create_base_connection(records)
+        conn = create_files_connection(records)
 
         sql = """
             SELECT path, title, date
@@ -137,13 +137,10 @@ class TestQueryE2EBenchmark:
     ) -> None:
         """Measure full query tool execution time."""
         import frontmatter_mcp.server as server_module
-        from frontmatter_mcp.files import FileRecordCache
-        from frontmatter_mcp.settings import get_settings
+        from frontmatter_mcp.settings import Settings
 
         base_dir = benchmark_dir_factory(file_count)
-        monkeypatch.setenv("FRONTMATTER_BASE_DIR", str(base_dir))
-        get_settings.cache_clear()
-        settings = get_settings()
+        settings = Settings(base_dir=base_dir)
         cache = FileRecordCache()
 
         def run_query() -> dict[str, Any]:
@@ -155,8 +152,5 @@ class TestQueryE2EBenchmark:
                 semantic_ctx=None,
             )
 
-        try:
-            result = benchmark(run_query)
-            assert result["row_count"] == file_count
-        finally:
-            get_settings.cache_clear()
+        result = benchmark(run_query)
+        assert result["row_count"] == file_count

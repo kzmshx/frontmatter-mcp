@@ -1,12 +1,18 @@
-"""Embedding model module for semantic search."""
+"""Models for semantic search: the embedding model and the reranker.
 
-from typing import TYPE_CHECKING, Any, cast
+Both load lazily (sentence-transformers imports torch, several hundred MB),
+and loading is guarded by a lock because the indexing thread and tool calls
+can trigger it at the same time.
+"""
+
+import threading
+from typing import TYPE_CHECKING, Protocol
 
 import numpy as np
 from numpy.typing import NDArray
 
 if TYPE_CHECKING:
-    from sentence_transformers import SentenceTransformer
+    from sentence_transformers import CrossEncoder, SentenceTransformer
 
 # ruri-v3 is trained with task prefixes; retrieval uses these two
 RURI_V3_QUERY_PREFIX = "検索クエリ: "
@@ -38,6 +44,7 @@ class EmbeddingModel:
         """
         self._name = name
         self._model: "SentenceTransformer | None" = None
+        self._lock = threading.Lock()
         default_query, default_document = default_prefixes(name)
         self.query_prefix = default_query if query_prefix is None else query_prefix
         self.document_prefix = (
@@ -51,22 +58,13 @@ class EmbeddingModel:
 
     @property
     def model(self) -> "SentenceTransformer":
-        """Get the model, loading it if necessary."""
-        if self._model is None:
-            self._load_model()
-        assert self._model is not None
-        return self._model
+        """Get the model, loading it on first use."""
+        with self._lock:
+            if self._model is None:
+                from sentence_transformers import SentenceTransformer
 
-    def _load_model(self) -> None:
-        """Load the sentence-transformers model.
-
-        Imported here, not at module level: importing sentence-transformers
-        loads torch (several hundred MB), which a server that never runs a
-        semantic search should not pay for.
-        """
-        from sentence_transformers import SentenceTransformer
-
-        self._model = SentenceTransformer(self._name)
+                self._model = SentenceTransformer(self._name)
+            return self._model
 
     @property
     def is_loaded(self) -> bool:
@@ -89,17 +87,6 @@ class EmbeddingModel:
             raise RuntimeError("Model does not report embedding dimension")
         return dim
 
-    def encode(self, text: str) -> NDArray[np.floating[Any]]:
-        """Encode text as is (no prefix, not normalized).
-
-        Args:
-            text: Text to encode.
-
-        Returns:
-            Embedding vector as numpy array.
-        """
-        return cast(NDArray[np.floating[Any]], self.model.encode(text))
-
     def encode_query(self, text: str) -> NDArray[np.float32]:
         """Encode a search query with the query prefix, L2-normalized."""
         vector = self.model.encode(self.query_prefix + text, normalize_embeddings=True)
@@ -118,3 +105,31 @@ class EmbeddingModel:
             show_progress_bar=False,
         )
         return np.asarray(vectors, dtype=np.float32)
+
+
+class Scorer(Protocol):
+    """Scores (query, text) pairs; higher means more relevant."""
+
+    def score(self, query: str, texts: list[str]) -> NDArray[np.float32]: ...
+
+
+class Reranker:
+    """Lazy-loading cross-encoder."""
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self._model: "CrossEncoder | None" = None
+        self._lock = threading.Lock()
+
+    @property
+    def model(self) -> "CrossEncoder":
+        with self._lock:
+            if self._model is None:
+                from sentence_transformers import CrossEncoder
+
+                self._model = CrossEncoder(self.name, max_length=512)
+            return self._model
+
+    def score(self, query: str, texts: list[str]) -> NDArray[np.float32]:
+        scores = self.model.predict([(query, t) for t in texts], batch_size=16)
+        return np.asarray(scores, dtype=np.float32)

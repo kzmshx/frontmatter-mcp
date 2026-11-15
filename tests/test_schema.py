@@ -2,11 +2,11 @@
 
 from datetime import date
 
-from frontmatter_mcp.query_schema import create_base_schema
+from frontmatter_mcp.schema import infer_schema
 
 
-class TestCreateBaseSchema:
-    """Tests for create_base_schema function."""
+class TestInferSchema:
+    """Tests for infer_schema function."""
 
     def test_basic_types(self) -> None:
         """Detect string and array types."""
@@ -14,7 +14,7 @@ class TestCreateBaseSchema:
             {"path": "a.md", "date": date(2025, 11, 27), "tags": ["mcp"]},
             {"path": "b.md", "date": date(2025, 11, 26), "tags": ["python", "duckdb"]},
         ]
-        schema = create_base_schema(records)
+        schema = infer_schema(records)
 
         # path is always included
         assert "path" in schema
@@ -34,7 +34,7 @@ class TestCreateBaseSchema:
             {"path": "a.md", "title": "Title A", "summary": "Summary"},
             {"path": "b.md", "title": "Title B"},
         ]
-        schema = create_base_schema(records)
+        schema = infer_schema(records)
 
         assert schema["title"]["nullable"] is False
         assert schema["summary"]["nullable"] is True
@@ -48,7 +48,7 @@ class TestCreateBaseSchema:
             {"path": "b.md", "category": "life"},
             {"path": "c.md", "category": "tech"},
         ]
-        schema = create_base_schema(records, max_samples=2)
+        schema = infer_schema(records, max_samples=2)
 
         assert len(schema["category"]["examples"]) == 2
         assert "tech" in schema["category"]["examples"]
@@ -57,12 +57,12 @@ class TestCreateBaseSchema:
     def test_path_included(self) -> None:
         """Path property should appear in schema."""
         records = [{"path": "a.md", "title": "A"}]
-        schema = create_base_schema(records)
+        schema = infer_schema(records)
 
         assert "path" in schema
         assert "title" in schema
 
     def test_empty_records(self) -> None:
         """Empty records return empty schema."""
-        schema = create_base_schema([])
+        schema = infer_schema([])
         assert schema == {}
