@@ -72,7 +72,8 @@ def _parse_args(argv: list[str] | None) -> None:
         action="version",
         version=f"%(prog)s {importlib.metadata.version('frontmatter-mcp')}",
     )
-    parser.parse_args(argv)
+    # Other arguments were always ignored; keep it that way for existing configs
+    parser.parse_known_args(argv)
 
 
 def main(argv: list[str] | None = None) -> None:
