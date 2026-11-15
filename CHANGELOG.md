@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.0](https://github.com/kzmshx/frontmatter-mcp/compare/v0.6.2...v0.7.0) (2026-11-15)
+
+
+### Features
+
+* exclude files from every tool with FRONTMATTER_EXCLUDE ([#77](https://github.com/kzmshx/frontmatter-mcp/issues/77)) ([3f1ec30](https://github.com/kzmshx/frontmatter-mcp/commit/3f1ec302f47538aae05fa73f1c70ae419e771370))
+* skip template text in search and return each passage's heading path ([#78](https://github.com/kzmshx/frontmatter-mcp/issues/78)) ([7785ace](https://github.com/kzmshx/frontmatter-mcp/commit/7785ace9219304e683f1959994bc8cb4e909e543))
+
+
+### Bug Fixes
+
+* answer --version and --help without reading settings ([#76](https://github.com/kzmshx/frontmatter-mcp/issues/76)) ([3ccdc32](https://github.com/kzmshx/frontmatter-mcp/commit/3ccdc3280c2a4347065f6f64f773b402f0eabc6a))
+
 ## [0.6.2](https://github.com/kzmshx/frontmatter-mcp/compare/v0.6.1...v0.6.2) (2026-11-15)
 
 
