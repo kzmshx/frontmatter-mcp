@@ -10,16 +10,6 @@ uv sync
 
 The dev group includes the project with its `semantic` extra, so every test can run. CI also tests a plain `uv sync --no-dev` install (no extras).
 
-### Serena MCP Setup
-
-Serena is an MCP server for code analysis. Project settings are in `.serena/`.
-
-Run in project root:
-
-```bash
-claude mcp add serena -s local -- uvx --from git+https://github.com/oraios/serena serena start-mcp-server --context ide-assistant --project $(pwd)
-```
-
 ## Commands
 
 | Command          | Description                                   |
