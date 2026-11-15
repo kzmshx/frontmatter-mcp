@@ -7,7 +7,6 @@ from typing import Any
 import frontmatter
 from fastmcp import FastMCP
 from fastmcp.dependencies import Depends
-from mcp.types import ToolAnnotations
 
 from frontmatter_mcp.dependencies import (
     get_file_record_cache,
@@ -29,6 +28,10 @@ from frontmatter_mcp.settings import Settings
 Response = dict[str, Any]
 
 mcp = FastMCP("frontmatter-mcp")
+
+# A dict instead of mcp.types.ToolAnnotations: the field is readOnlyHint in
+# mcp 1.x and read_only_hint in 2.x, and the camelCase alias works in both
+READ_ONLY = {"readOnlyHint": True}
 
 
 def _collect_files(base_dir: Path, glob_pattern: str) -> list[Path]:
@@ -94,7 +97,7 @@ def _resolve_path(base_dir: Path, rel_path: str) -> Path:
     return abs_path
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+@mcp.tool(annotations=READ_ONLY)
 def query_inspect(
     glob: str,
     settings: Settings = Depends(get_settings),
@@ -128,7 +131,7 @@ def query_inspect(
     )
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+@mcp.tool(annotations=READ_ONLY)
 def query(
     glob: str,
     sql: str,
@@ -179,7 +182,7 @@ def query(
     )
 
 
-@mcp.tool(tags={"semantic"}, annotations=ToolAnnotations(readOnlyHint=True))
+@mcp.tool(tags={"semantic"}, annotations=READ_ONLY)
 def index_status(
     semantic_ctx: SemanticContext | None = Depends(get_semantic_ctx),
 ) -> Response:
@@ -195,7 +198,7 @@ def index_status(
     return _build_response({"state": semantic_ctx.indexer.state.value})
 
 
-@mcp.tool(tags={"semantic"}, annotations=ToolAnnotations(readOnlyHint=True))
+@mcp.tool(tags={"semantic"}, annotations=READ_ONLY)
 def index_wait(
     timeout: float = 60.0,
     semantic_ctx: SemanticContext | None = Depends(get_semantic_ctx),
