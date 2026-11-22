@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/kzmshx/frontmatter-mcp/compare/v0.7.0...v0.7.1) (2026-11-22)
+
+
+### Bug Fixes
+
+* **deps:** Bump the "weekly" group with 1 update across multiple ecosystems ([#80](https://github.com/kzmshx/frontmatter-mcp/issues/80)) ([5b982a0](https://github.com/kzmshx/frontmatter-mcp/commit/5b982a0af045db2f4db96e2f26e5a03245f5fcae))
+
 ## [0.7.0](https://github.com/kzmshx/frontmatter-mcp/compare/v0.6.2...v0.7.0) (2026-11-15)
 
 
